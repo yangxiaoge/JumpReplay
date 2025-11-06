@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- General -->
+    <string name="positive_button">OK</string>
+    <string name="negative_button">キャンセル</string>
+    <string name="action_settings">もっと多くのオプション</string>
+    <string name="action_delete">クリア</string>
+    <string name="menu_home">キャプチャ</string>
+    <string name="menu_detail">詳細内容</string>
+    <string name="menu_gallery">お気に入り</string>
+    <string name="menu_me">概要</string>
+    <string name="empty_view">ボタンをクリックしてHOOKを開始</string>
+    <string name="copy_code">コマンドをコピー</string>
+    <string name="add_text">追加</string>
+    <string name="delete">削除</string>
+    <string name="todo">TODO</string>
+    <string name="activity_label">インテントインターセプター</string>
+    <string name="menu_intercept">インテントインターセプター</string>
+    <string name="search">検索</string>
+    <string name="activity">アクティビティ</string>
+    <string name="reset_intent">初期値にリセット</string>
+    <string name="send_intent">インテントを送信</string>
+    <string name="intent_app_name">アプリ名</string>
+    <string name="intent_app_activity">com.example.app</string>
+    <string name="match_apps">一致するアプリ:</string>
+    <string name="copy_am_code">コピー</string>
+    <string name="call_su_code">呼び出し</string>
+    <string name="is_root">rootを使用</string>
+    <string name="star">お気に入り</string>
+    <string name="settings">設定</string>
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="disabled">無効化</string>
+    <string name="add_link">ショートカットを作成</string>
+    <string name="setup">設定</string>
+    <string name="float_window">フローティングウィンドウ（プロセス再起動後に有効）</string>
+
+</resources>
