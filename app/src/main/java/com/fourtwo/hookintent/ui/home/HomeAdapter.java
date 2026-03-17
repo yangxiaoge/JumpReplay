@@ -33,18 +33,21 @@ import com.fourtwo.hookintent.utils.SharedPreferencesUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class HomeAdapter extends RecyclerView.Adapter<HomeAdapter.ViewHolder> implements Filterable {
 
     private List<ItemData> mData;
     private List<ItemData> filteredData;
-    private final int normalColor = Color.WHITE; // 正常状态的颜色
-    private final int pressedColor = Color.LTGRAY; // 触摸时的颜色
+    private final int normalColor = Color.WHITE;
+    private final int pressedColor = Color.LTGRAY;
+
+    private String currentQuery = "";
 
     public HomeAdapter(List<ItemData> data) {
-        this.mData = data;
-        this.filteredData = new ArrayList<>(data);
+        this.mData = data != null ? new ArrayList<>(data) : new ArrayList<>();
+        this.filteredData = new ArrayList<>(this.mData);
     }
 
     @NonNull
@@ -54,44 +57,69 @@ public class HomeAdapter extends RecyclerView.Adapter<HomeAdapter.ViewHolder> im
         return new ViewHolder(view);
     }
 
-    @Override
-    public Filter getFilter() {
-        return new Filter() {
-            @Override
-            protected FilterResults performFiltering(CharSequence constraint) {
-                List<ItemData> filteredList = new ArrayList<>();
-                if (constraint == null || constraint.length() == 0) {
-                    filteredList.addAll(mData);
-                } else {
-                    String filterPattern = constraint.toString().toLowerCase().trim();
-                    for (ItemData item : mData) {
-                        // 判断item是否包含过滤的字符串
-                        if (item.getAppName().toLowerCase().contains(filterPattern) ||
-                                item.getItem_from().toLowerCase().contains(filterPattern) ||
-                                item.getItem_data().toLowerCase().contains(filterPattern)) {
-                            filteredList.add(item);
-                        }
+    private final Filter homeFilter = new Filter() {
+        @Override
+        protected FilterResults performFiltering(CharSequence constraint) {
+            List<ItemData> source = mData != null ? new ArrayList<>(mData) : new ArrayList<>();
+            List<ItemData> filteredList = new ArrayList<>();
+
+            String filterPattern = constraint == null
+                    ? ""
+                    : constraint.toString().toLowerCase(Locale.ROOT).trim();
+
+            if (filterPattern.isEmpty()) {
+                filteredList.addAll(source);
+            } else {
+                for (ItemData item : source) {
+                    if (item == null) {
+                        continue;
+                    }
+
+                    String appName = safeLower(item.getAppName());
+                    String itemFrom = safeLower(item.getItem_from());
+                    String itemData = safeLower(item.getItem_data());
+
+                    if (appName.contains(filterPattern)
+                            || itemFrom.contains(filterPattern)
+                            || itemData.contains(filterPattern)) {
+                        filteredList.add(item);
                     }
                 }
-                FilterResults results = new FilterResults();
-                results.values = filteredList;
-                return results;
             }
 
-            @SuppressLint("NotifyDataSetChanged")
-            @Override
-            protected void publishResults(CharSequence constraint, FilterResults results) {
-                filteredData.clear();
+            FilterResults results = new FilterResults();
+            results.values = filteredList;
+            results.count = filteredList.size();
+            return results;
+        }
+
+        @SuppressWarnings("unchecked")
+        @SuppressLint("NotifyDataSetChanged")
+        @Override
+        protected void publishResults(CharSequence constraint, FilterResults results) {
+            currentQuery = constraint == null ? "" : constraint.toString();
+
+            filteredData.clear();
+            if (results != null && results.values instanceof List) {
                 filteredData.addAll((List<ItemData>) results.values);
-                notifyDataSetChanged();
             }
-        };
+            notifyDataSetChanged();
+        }
+    };
+
+    @Override
+    public Filter getFilter() {
+        return homeFilter;
+    }
+
+    private String safeLower(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT);
     }
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         ItemData item = filteredData.get(position);
-//        ItemData item = mData.get(position);
+
         holder.icon.setImageDrawable(item.getIcon());
         holder.appName.setText(item.getAppName());
         holder.item_from.setText(item.getItem_from());
@@ -101,14 +129,19 @@ public class HomeAdapter extends RecyclerView.Adapter<HomeAdapter.ViewHolder> im
 
         String category = item.getCategory();
         holder.category.setText(category);
+
         Context context = holder.itemView.getContext();
 
         Drawable drawable = ContextCompat.getDrawable(context, R.drawable.badge_background);
-        if (!(drawable instanceof GradientDrawable)) {return;}
-        GradientDrawable background = (GradientDrawable) drawable;
+        if (!(drawable instanceof GradientDrawable)) {
+            return;
+        }
+
+        GradientDrawable background = (GradientDrawable) drawable.mutate();
         String COLORS_CONFIG = SharedPreferencesUtils.getStr(context, Constants.COLORS_CONFIG);
         Map<String, String> COLORS = JsonHandler.jsonToMap(COLORS_CONFIG);
-        if (COLORS.containsKey(category)) {
+
+        if (category != null && COLORS.containsKey(category)) {
             background.setColor(Color.parseColor(COLORS.get(category)));
         } else {
             background.setColor(Color.GRAY);
@@ -116,10 +149,13 @@ public class HomeAdapter extends RecyclerView.Adapter<HomeAdapter.ViewHolder> im
         holder.category.setBackground(background);
 
         holder.itemView.setOnClickListener(v -> {
-            NavController navController = Navigation.findNavController((Activity) v.getContext(), R.id.nav_host_fragment_content_main);
+            NavController navController = Navigation.findNavController(
+                    (Activity) v.getContext(),
+                    R.id.nav_host_fragment_content_main
+            );
 
             Bundle bundle = new Bundle();
-            bundle.putParcelable("itemData", item); // 使用 putParcelable
+            bundle.putParcelable("itemData", item);
 
             navController.navigate(R.id.action_nav_home_to_nav_detail, bundle);
         });
@@ -154,35 +190,30 @@ public class HomeAdapter extends RecyclerView.Adapter<HomeAdapter.ViewHolder> im
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     animator = ValueAnimator.ofArgb(startColor, endColor);
                 }
-                assert animator != null;
+                if (animator == null) {
+                    return;
+                }
                 animator.setDuration(300);
-                animator.addUpdateListener(animation -> view.setBackgroundColor((int) animation.getAnimatedValue()));
+                animator.addUpdateListener(animation ->
+                        view.setBackgroundColor((int) animation.getAnimatedValue()));
                 animator.start();
             }
         });
     }
 
     private void showPopupWindow(View view, ItemData item) {
-        // 实现弹出窗口逻辑，例如使用PopupWindow或AlertDialog
         AlertDialog.Builder builder = new AlertDialog.Builder(view.getContext());
         builder.setTitle(item.getCategory())
-                .setMessage(item.getItem_from() + "\n\n" + item.getItem_data())
+                .setMessage(String.valueOf(item.getItem_from()) + "\n\n" + String.valueOf(item.getItem_data()))
                 .setPositiveButton("OK", (dialog, which) -> dialog.dismiss())
                 .show();
     }
 
-
     public void removeItem(int position) {
         if (position >= 0 && position < filteredData.size()) {
-            // 获取要删除的项目
             ItemData item = filteredData.get(position);
-
-            // 从 filteredData 中移除
             filteredData.remove(position);
-
-            // 从 mData 中移除相同的项目
             mData.remove(item);
-
             notifyItemRemoved(position);
         }
     }
@@ -195,23 +226,29 @@ public class HomeAdapter extends RecyclerView.Adapter<HomeAdapter.ViewHolder> im
     public List<ItemData> getFilteredData() {
         return filteredData;
     }
+
     @SuppressLint("NotifyDataSetChanged")
     public void setData(List<ItemData> newData) {
-        this.mData = newData;
-        this.filteredData = new ArrayList<>(newData);  // 更新 filteredData
-        notifyDataSetChanged();  // Notify the adapter that the data has changed
+        this.mData = newData != null ? new ArrayList<>(newData) : new ArrayList<>();
+
+        if (currentQuery == null || currentQuery.trim().isEmpty()) {
+            this.filteredData = new ArrayList<>(this.mData);
+            notifyDataSetChanged();
+        } else {
+            getFilter().filter(currentQuery);
+        }
     }
 
     public List<ItemData> getData() {
         return mData;
     }
 
-    // 新增清空数据的方法
     @SuppressLint("NotifyDataSetChanged")
     public void clearData() {
+        currentQuery = "";
         mData.clear();
         filteredData.clear();
-        notifyDataSetChanged();  // 通知适配器数据已更改
+        notifyDataSetChanged();
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {

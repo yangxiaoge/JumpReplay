@@ -11,6 +11,8 @@ import com.fourtwo.hookintent.base.Extract;
 import com.fourtwo.hookintent.base.JsonHandler;
 import com.fourtwo.hookintent.data.ItemData;
 
+import java.util.HashMap;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,7 +24,7 @@ public class DataProcessor {
     private final Context context;
     private final IntentDuplicateChecker intentDuplicateChecker;
     private final IntentDuplicateChecker schemeDuplicateChecker;
-    private Map<String, Object> JsonData;
+    private Map<String, Object> JsonData = new HashMap<>();
 
     public DataProcessor(Context context) {
         this.context = context;
@@ -36,9 +38,8 @@ public class DataProcessor {
 
     // 新增方法：设置 JsonData
     public void setJsonData(Map<String, Object> jsonData) {
-        this.JsonData = jsonData;
+        this.JsonData = jsonData != null ? jsonData : new HashMap<>();
     }
-
     public void processBundle(Bundle bundle, DataProcessedCallback callback) {
         String category = bundle.getString("category");
         String stackTrace = bundle.getString("stack_trace");
@@ -155,71 +156,152 @@ public class DataProcessor {
     }
 
 
-    public boolean isFilterMatched(Map<String, Object> schemeData, String key, String valueToMatch) {
-        List<Map<String, Object>> itemList = JsonHandler.getFilterValueJson(schemeData.get(key));
+    public boolean isFilterMatched(Map<String, Object> groupData, String key, String valueToMatch) {
+        if (valueToMatch == null) {
+            return false;
+        }
+
+        List<Map<String, Object>> itemList = JsonHandler.getFilterValueJson(groupData.get(key));
         if (itemList == null) {
             return false;
         }
 
         for (Map<String, Object> item : itemList) {
-            Boolean type = (Boolean) item.get("type");
-            String text = (String) item.get("text");
+            Object type = item.get("type");
+            Object text = item.get("text");
 
-            if (Boolean.TRUE.equals(type) && valueToMatch.equalsIgnoreCase(text)) {
+            if (Boolean.TRUE.equals(type) && text != null
+                    && valueToMatch.equalsIgnoreCase(String.valueOf(text))) {
                 return true;
             }
         }
         return false;
     }
 
-
     private boolean filterData(String base, Bundle bundle) {
-        boolean is_filter = false;
-
-        String functionCall = bundle.getString("FunctionCall");
-        String from = bundle.getString("from");
-
-        switch (base) {
-            case "Intent":
-                Map<String, Object> intentData = JsonHandler.getFilterKeyJson(JsonData.get("intent"));
-                if (intentData == null) return false;
-                if (isFilterMatched(intentData, "FunctionCall", functionCall)) {
-                    is_filter = true;
-                }
-                if (!is_filter && isFilterMatched(intentData, "from", from)) {
-                    is_filter = true;
-                }
-                break;
-            case "Scheme":
-                String scheme_url = bundle.getString("scheme_raw_url");
-                if (scheme_url == null) {
-                    is_filter = true;
-                    break;
-                }
-                String scheme = Uri.parse(scheme_url).getScheme();
-                if (scheme == null) {
-                    is_filter = true;
-                    break;
-                }
-
-                Map<String, Object> schemeData = JsonHandler.getFilterKeyJson(JsonData.get("scheme"));
-                if (schemeData == null) return false;
-
-                if (isFilterMatched(schemeData, "FunctionCall", functionCall)) {
-                    is_filter = true;
-                }
-
-                if (!is_filter && isFilterMatched(schemeData, "from", from)) {
-                    is_filter = true;
-                }
-
-                if (!is_filter && isFilterMatched(schemeData, "scheme", scheme)) {
-                    is_filter = true;
-                }
-                break;
-            default:
-                break;
+        if (JsonData == null || JsonData.isEmpty() || base == null) {
+            return false;
         }
-        return is_filter;
+
+        // 保留旧逻辑：无效 Scheme 直接丢弃，避免后续解析异常
+        if ("Scheme".equals(base)) {
+            String schemeRawUrl = bundle.getString("scheme_raw_url");
+            if (schemeRawUrl == null) {
+                return true;
+            }
+
+            String scheme = Uri.parse(schemeRawUrl).getScheme();
+            if (scheme == null) {
+                return true;
+            }
+        }
+
+        Map<String, Object> groupData = resolveFilterGroup(base);
+        if (groupData == null || groupData.isEmpty()) {
+            return false;
+        }
+
+        for (String key : groupData.keySet()) {
+            String valueToMatch = resolveBundleValue(base, bundle, key);
+            if (valueToMatch == null || valueToMatch.trim().isEmpty()) {
+                continue;
+            }
+
+            if (isFilterMatched(groupData, key, valueToMatch)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private Map<String, Object> resolveFilterGroup(String category) {
+        if (JsonData == null || JsonData.isEmpty() || category == null) {
+            return null;
+        }
+
+        Object directGroup = JsonData.get(category);
+        if (directGroup != null) {
+            return JsonHandler.getFilterKeyJson(directGroup);
+        }
+
+        if ("Intent".equalsIgnoreCase(category)) {
+            Object legacyIntentGroup = JsonData.get("intent");
+            if (legacyIntentGroup != null) {
+                return JsonHandler.getFilterKeyJson(legacyIntentGroup);
+            }
+        }
+
+        if ("Scheme".equalsIgnoreCase(category)) {
+            Object legacySchemeGroup = JsonData.get("scheme");
+            if (legacySchemeGroup != null) {
+                return JsonHandler.getFilterKeyJson(legacySchemeGroup);
+            }
+        }
+
+        Object lowerCaseGroup = JsonData.get(category.toLowerCase(Locale.ROOT));
+        if (lowerCaseGroup != null) {
+            return JsonHandler.getFilterKeyJson(lowerCaseGroup);
+        }
+
+        return null;
+    }
+
+    private String resolveBundleValue(String category, Bundle bundle, String key) {
+        Object directValue = bundle.get(key);
+        if (directValue != null) {
+            return String.valueOf(directValue);
+        }
+
+        if ("Scheme".equals(category)) {
+            return resolveSchemeValue(bundle, key);
+        }
+
+        return null;
+    }
+
+    private String resolveSchemeValue(Bundle bundle, String key) {
+        String schemeRawUrl = bundle.getString("scheme_raw_url");
+        if (schemeRawUrl == null) {
+            return null;
+        }
+
+        if ("scheme_raw_url".equals(key)) {
+            return schemeRawUrl;
+        }
+
+        Uri uri;
+        try {
+            uri = Uri.parse(schemeRawUrl);
+        } catch (Exception e) {
+            return null;
+        }
+
+        switch (key) {
+            case "scheme":
+                return uri.getScheme();
+            case "schemeSpecificPart":
+                return uri.getSchemeSpecificPart();
+            case "authority":
+                return uri.getAuthority();
+            case "userInfo":
+                return uri.getUserInfo();
+            case "host":
+                return uri.getHost();
+            case "port":
+                return String.valueOf(uri.getPort());
+            case "path":
+                return uri.getPath();
+            case "query":
+                return uri.getQuery();
+            case "fragment":
+                return uri.getFragment();
+            case "lastPathSegment":
+                return uri.getLastPathSegment();
+            case "pathSegments":
+                return String.valueOf(uri.getPathSegments());
+            default:
+                return null;
+        }
     }
 }

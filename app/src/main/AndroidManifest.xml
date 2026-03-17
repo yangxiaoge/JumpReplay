@@ -33,6 +33,14 @@
         android:theme="@style/Theme.HookIntent"
         tools:targetApi="31">
 
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
 
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
@@ -105,17 +113,32 @@
 
 <!--                android:launchMode="singleTask"-->
 <!--                android:process=":scheme_process"-->
+<!--        <activity-->
+<!--            android:name=".DisabledActivity"-->
+<!--            android:exported="false"-->
+<!--            android:label="禁用意图"-->
+<!--            android:taskAffinity="com.fourtwo.intercept"-->
+<!--            android:theme="@style/Theme.HookIntent.NoActionBar" />-->
+
+
+<!--        <activity-->
+<!--            android:name=".ShortcutActivity"-->
+<!--            android:label="快捷方式"-->
+<!--            android:theme="@style/TransparentActivity"-->
+<!--            android:exported="true"-->
+<!--            android:launchMode="singleTask"-->
+<!--            android:excludeFromRecents="true"-->
+<!--            android:finishOnTaskLaunch="true" />-->
         <activity
             android:name=".DisabledActivity"
             android:exported="false"
-            android:label="禁用意图"
+            android:label="@string/disabled_activity_label"
             android:taskAffinity="com.fourtwo.intercept"
             android:theme="@style/Theme.HookIntent.NoActionBar" />
 
-
         <activity
             android:name=".ShortcutActivity"
-            android:label="快捷方式"
+            android:label="@string/shortcut_activity_label"
             android:theme="@style/TransparentActivity"
             android:exported="true"
             android:launchMode="singleTask"

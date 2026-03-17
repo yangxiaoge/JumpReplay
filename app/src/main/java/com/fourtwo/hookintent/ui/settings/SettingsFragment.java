@@ -71,9 +71,12 @@ public class SettingsFragment extends Fragment {
 
     private String selectedCategory;
 
+    private String ALL_STRING;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ALL_STRING = getString(R.string.all);
     }
 
     private void onEdit(Map<String, Object> _currentItem, int _position) {
@@ -108,7 +111,7 @@ public class SettingsFragment extends Fragment {
         category_list.setAdapter(categoryAdapter);
 
         // 默认选择 "所有" 标签
-        selectedCategory = "所有";
+        selectedCategory = ALL_STRING;
         filterData(selectedCategory);
 
 
@@ -143,7 +146,7 @@ public class SettingsFragment extends Fragment {
                         COLORS.remove(category); // 从 SharedPreferences 中移除
                         SharedPreferencesUtils.putStr(requireContext(), Constants.COLORS_CONFIG, JsonHandler.mapToJson(COLORS));
                         categoryAdapter.notifyDataSetChanged();
-                        filterData("所有"); // 重置筛选为 "所有"
+                        filterData(ALL_STRING); // 重置筛选为 "所有"
                     } else if (which == 1) {
                         // 编辑标签
                         showColorPickerDialog(requireContext(), category);
@@ -178,7 +181,7 @@ public class SettingsFragment extends Fragment {
     }
 
     private void prepareCategoryData() {
-        categoryData.add(new Pair<>("所有", "#808080")); // 默认添加 "所有" 标签
+        categoryData.add(new Pair<>(ALL_STRING, "#808080")); // 默认添加 "所有" 标签
 
         String colorsJson = SharedPreferencesUtils.getStr(requireContext(), Constants.COLORS_CONFIG);
 
@@ -203,7 +206,7 @@ public class SettingsFragment extends Fragment {
     @SuppressLint("NotifyDataSetChanged")
     private void filterData(String category) {
         filteredData.clear();
-        if ("所有".equals(category)) {
+        if (ALL_STRING.equals(category)) {
             filteredData.addAll(dataList); // 引用 dataList 的原始数据
         } else {
             for (Map<String, Object> item : dataList) {

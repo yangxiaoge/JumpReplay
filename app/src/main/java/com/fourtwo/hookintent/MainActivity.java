@@ -84,14 +84,20 @@ public class MainActivity extends AppCompatActivity {
             public void onVersionReceived(String new_version) {
                 // 处理收到的版本号
                 Log.d(TAG, "最新版本号: " + new_version);
-                versionTextView.setText(String.format("当前: v%s\n最新: v%s", now_version, new_version));
+                versionTextView.setText(getString(R.string.version_current_latest, now_version, new_version));
             }
 
             @Override
             public void onFailure(String errorMessage) {
                 // 处理失败情况
                 Log.e(TAG, errorMessage);
-                versionTextView.setText(String.format("当前: v%s\n最新: %s", now_version, "未获取到版本号"));
+                versionTextView.setText(
+                        getString(
+                                R.string.version_current_latest,
+                                now_version,
+                                getString(R.string.version_not_available)
+                        )
+                );
             }
         });
 

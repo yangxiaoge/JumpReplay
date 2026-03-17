@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.HashMap;
 
 public class HomeFragment extends Fragment {
     private final String TAG = "HomeFragment";
@@ -61,7 +62,7 @@ public class HomeFragment extends Fragment {
     private FloatingActionButton fab;
     private static boolean isHook = false; // 保留 isHook 状态
 
-    private Map<String, Object> JsonData;
+    private Map<String, Object> JsonData = new HashMap<>();
 
     private boolean getIsHook() {
         // 调用 MessengerService 的 notifyClients 方法
@@ -88,7 +89,7 @@ public class HomeFragment extends Fragment {
                 // 使用反射设置溢出菜单中的图标可见
                 if (menu.getClass().getSimpleName().equalsIgnoreCase("MenuBuilder")) {
                     try {
-                        Method method = menu.getClass().getDeclaredMethod("setOptionalIconsVisible", Boolean.TYPE);
+                        @SuppressLint("PrivateApi") Method method = menu.getClass().getDeclaredMethod("setOptionalIconsVisible", Boolean.TYPE);
                         method.setAccessible(true);
                         method.invoke(menu, true);
                     } catch (Exception e) {
@@ -257,6 +258,11 @@ public class HomeFragment extends Fragment {
         ItemTouchHelper itemTouchHelper = new ItemTouchHelper(simpleItemTouchCallback);
         itemTouchHelper.attachToRecyclerView(recyclerView);
 
+        JsonData = new JsonHandler().readJsonFromFile(requireContext());
+        if (JsonData == null) {
+            JsonData = new HashMap<>();
+        }
+
         // 初始化 DataProcessor
         dataProcessor = new DataProcessor(requireContext());
         dataProcessor.setJsonData(JsonData);
@@ -286,9 +292,9 @@ public class HomeFragment extends Fragment {
         if (isHook) {
             fab.setImageResource(android.R.drawable.ic_media_pause);
             fab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#47AA4B")));
-            setEmptyView("暂无数据");
+            setEmptyView(getString(R.string.empty_view_not));
         } else {
-            setEmptyView("点击按钮开启HOOK");
+            setEmptyView(getString(R.string.empty_view));
             fab.setImageResource(android.R.drawable.ic_media_play);
             fab.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#CE1A7EAC")));
         }
@@ -301,7 +307,7 @@ public class HomeFragment extends Fragment {
         if (MainActivity.isXposed()) {
             emptyView.setText(text);
         } else {
-            emptyView.setText("模块未激活! 如果使用了LSPatch 请忽略");
+            emptyView.setText(getString(R.string.empty_view_not_xposed_text));
             emptyView.setTextColor(ContextCompat.getColor(requireContext(), R.color.red));
         }
     }
@@ -313,7 +319,7 @@ public class HomeFragment extends Fragment {
 
         recyclerView = root.findViewById(R.id.recycler_view);
         emptyView = root.findViewById(R.id.empty_view);
-        setEmptyView("点击按钮开启HOOK");
+        setEmptyView(getString(R.string.empty_view));
 
         // Set up RecyclerView
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
@@ -361,6 +367,9 @@ public class HomeFragment extends Fragment {
         }
 
         JsonData = new JsonHandler().readJsonFromFile(requireContext());
+        if (JsonData == null) {
+            JsonData = new HashMap<>();
+        }
         Log.d(TAG, "onResume: " + JsonData);
 
         dataProcessor.setJsonData(JsonData);

@@ -1,0 +1,99 @@
+<resources>
+    <string name="app_name">JumpReplay</string>
+    <string name="nav_header_subtitle">https://github.com/FourTwooo/JumpReplay</string>
+    <string name="action_settings">More options</string>
+    <string name="action_delete">Clear</string>
+
+    <string name="menu_home">Capture</string>
+    <string name="menu_detail">Details</string>
+    <string name="menu_gallery">Favorites</string>
+    <string name="menu_me">About</string>
+
+    <string name="empty_view">Tap the button to start HOOK</string>
+    <string name="copy_code">Copy command</string>
+
+    <string name="add_text">Add</string>
+    <string name="delete">Delete</string>
+    <string name="todo">TODO</string>
+    <string name="activity_label">Intent Interceptor</string>
+    <string name="menu_intercept">Intent Interceptor</string>
+    <string name="search">Search</string>
+    <string name="activity">Activity</string>
+    <string name="reset_intent">Reset to initial value</string>
+    <string name="send_intent">Send intent</string>
+    <string name="intent_app_name">App name</string>
+    <string name="intent_app_activity">com.example.app\ncom.example.app.MainActivity</string>
+    <string name="match_apps">Matched apps: </string>
+    <string name="copy_am_code">Copy</string>
+    <string name="call_su_code">Call</string>
+    <string name="is_root">Use root</string>
+    <string name="star">Favorites</string>
+    <string name="settings">Configuration</string>
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="disabled">Disabled</string>
+    <string name="add_link">Create shortcut</string>
+    <string name="setup">Setup</string>
+    <string name="float_window">Floating window (takes effect after process restart)</string>
+
+    <string name="filter">Filter</string>
+    <string name="disabled_activity_label">Disabled Intent</string>
+    <string name="shortcut_activity_label">Shortcut</string>
+
+    <string name="version_current_latest">Current: v%1$s\nLatest: v%2$s</string>
+    <string name="version_not_available">Failed to fetch</string>
+
+    <string name="action_language">Language</string>
+    <string name="dialog_select_language">Select language</string>
+    <string name="lang_follow_system">Follow system</string>
+    <string name="lang_simplified_chinese">简体中文</string>
+    <string name="lang_english">English</string>
+    <string name="lang_japan">日本語</string>
+    <string name="cancel">Cancel</string>
+
+    <string name="root_service_available">Root service available</string>
+    <string name="root_service_unavailable">Root service unavailable</string>
+    <string name="xposed_framework_available">Xposed framework available</string>
+    <string name="xposed_framework_unavailable">Xposed framework unavailable</string>
+
+    <string name="shizuku_service_available">Shizuku service available</string>
+    <string name="shizuku_service_unauthorized">Shizuku service not authorized</string>
+    <string name="shizuku_service_unavailable">Shizuku service unavailable</string>
+
+    <string name="partial_features_unavailable">Some features are unavailable</string>
+    <string name="partial_features_unavailable_lspatch">Some features are unavailable (ignore if using LSPatch)</string>
+
+    <string name="shizuku_request_permission_hint">Tap the card to request permission</string>
+    <string name="shizuku_status_detail">API %1$d, %2$s(%3$d)</string>
+
+    <string name="mode_adb">adb</string>
+    <string name="mode_root">root</string>
+    <string name="mode_unknown">Unknown</string>
+
+    <string-array name="items_array">
+        <item>root</item>
+        <item>Shizuku</item>
+        <item>Shizuku - System Helper</item>
+    </string-array>
+
+    <string-array name="packages_array">
+        <item>All apps</item>
+        <item>User apps</item>
+        <item>System apps</item>
+    </string-array>
+
+    <string name="connect">connect</string>
+    <string name="all">all</string>
+    <string name="filter_key">Filter Key</string>
+    <string name="add_key">Add Key</string>
+    <string name="ok">OK</string>
+    <string name="key_false">Key cannot be empty</string>
+    <string name="key_true">Key already exists</string>
+    <string name="no">Cancel</string>
+    <string name="key_input_text">e.g., title / data / FunctionCall</string>
+    <string name="is_not_list">No groups available</string>
+    <string name="not_favorites">No favorites</string>
+    <string name="empty_view_not">No data</string>
+    <string name="empty_view_not_xposed_text">Module not activated! If using LSPatch, please ignore this</string>
+    <string name="open_window_main_switch">Open floating window (restart process to take effect)</string>
+    <string name="window_sub_switch">Module floating window switch</string>
+</resources>

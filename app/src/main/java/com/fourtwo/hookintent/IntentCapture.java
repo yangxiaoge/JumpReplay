@@ -60,7 +60,7 @@ import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
-import okhttp3.Request;
+//import okhttp3.Request;
 
 
 public class IntentCapture implements IXposedHookLoadPackage {
@@ -151,7 +151,8 @@ public class IntentCapture implements IXposedHookLoadPackage {
             }
         }
 
-        String uri = intent.toUri(Intent.URI_INTENT_SCHEME);
+        String uri = null;
+        uri = intent.toUri(Intent.URI_INTENT_SCHEME);
         Bundle bundle = DataConverter.convertIntentToBundle(intent);
         bundle.putString("FunctionCall", FunctionCall);
         bundle.putString("category", "Intent");
@@ -177,6 +178,64 @@ public class IntentCapture implements IXposedHookLoadPackage {
             return null;
         }
     }
+
+    // 临时
+    // 只追踪 BuyNow 那一条 LiveData 实例
+    private static final java.util.Set<Object> BUY_NOW_LDS =
+            java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+
+    // 反射取 getter 的小工具
+    private static void tryPutGetter(java.util.Map<String, Object> out, Object obj, String getter) {
+        try {
+            java.lang.reflect.Method m = obj.getClass().getMethod(getter);
+            Object v = m.invoke(obj);
+            if (v != null) out.put(getter.substring(3), v);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    // 提取 BuyNowInfoModel 的关键字段（字段名被混淆也能兜底）
+    private String extractBuyNowFieldsJson(Object value) {
+        if (value == null) return "{}";
+        java.util.LinkedHashMap<String, Object> out = new java.util.LinkedHashMap<>();
+        // 常见字段优先（命名可能不同，留多几手）
+        tryPutGetter(out, value, "getSpuId");
+        tryPutGetter(out, value, "getSkuId");
+        tryPutGetter(out, value, "getPropertyValueId");
+        tryPutGetter(out, value, "getQuantity");
+        tryPutGetter(out, value, "getAddressId");
+        tryPutGetter(out, value, "getCouponId");
+        tryPutGetter(out, value, "getSource");
+        tryPutGetter(out, value, "getBizTraceId");
+
+        // 如果以上都没拿到，枚举所有 public getter 兜底
+        if (out.isEmpty()) {
+            for (java.lang.reflect.Method m : value.getClass().getMethods()) {
+                if (m.getParameterTypes().length == 0 &&
+                        m.getName().startsWith("get") &&
+                        m.getReturnType() != Void.TYPE) {
+                    try {
+                        Object v = m.invoke(value);
+                        out.put(m.getName().substring(3), v);
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        }
+        try {
+            return JsonHandler.toJson((List<Bundle>) out);  // 你已有 JSON 工具
+        } catch (Throwable t) {
+            return String.valueOf(out);
+        }
+    }
+
+    // 粗判是否是 BuyNowInfoModel（包名可能变，宽松判断）
+    private boolean isBuyNowInfoModel(Object o) {
+        if (o == null) return false;
+        String n = o.getClass().getName();
+        return n.endsWith("BuyNowInfoModel") || n.contains("BuyNowInfo") || n.contains(".buy");
+    }
+    // 临时
 
     public void hookSystemMethods(Context applicationContext) {
         ClassLoader classLoader = applicationContext.getClassLoader();
@@ -647,8 +706,63 @@ public class IntentCapture implements IXposedHookLoadPackage {
             }
         }
 
-//        try {
-//            Class<?> okhttpClass = Class.forName("okhttp3.OkHttpClient", false, classLoader);
+        try {
+            Class<?> RealCall = Class.forName("okhttp3.RealCall", false, classLoader);
+            XposedHelpers.findAndHookMethod(RealCall, "execute", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    // 在方法调用前的逻辑（如需要可以添加）
+                }
+
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    try {
+                        Object response = param.getResult(); // 获取返回的 Response 对象
+                        Object request = XposedHelpers.callMethod(response, "request"); // 获取 Request 对象
+
+                        // 获取请求方法和 URL
+                        String method = (String) XposedHelpers.callMethod(request, "method");
+                        String url = XposedHelpers.callMethod(request, "url").toString();
+                        XposedBridge.log("[FINAL] [" + method + "] " + url);
+
+                        // 获取请求体
+                        Object body = XposedHelpers.callMethod(request, "body"); // 获取 RequestBody 对象
+                        if (body != null) {
+                            // 创建 Buffer 来读取请求体内容
+                            Class<?> bufferClass = XposedHelpers.findClass("okio.Buffer", classLoader);
+                            Object buffer = XposedHelpers.newInstance(bufferClass);
+
+                            // 调用 RequestBody.writeTo(buffer) 将内容写入 Buffer
+                            XposedHelpers.callMethod(body, "writeTo", buffer);
+
+                            // 获取 Buffer 中的字符串内容
+                            String requestBody = (String) XposedHelpers.callMethod(buffer, "readUtf8");
+                            XposedBridge.log("[REQUEST_BODY] " + requestBody); // 打印请求体日志
+                        }
+                        // 获取响应状态码
+                        int code = (int) XposedHelpers.callMethod(response, "code");
+
+                        // 获取响应体
+                        Object peekBody = XposedHelpers.callMethod(response, "peekBody", 1024 * 1024); // 获取最多 1MB 的数据
+                        String res_body = (String) XposedHelpers.callMethod(peekBody, "string");
+                        // 输出日志
+                        XposedBridge.log("[FINAL_BODY] [" + code + "] " + res_body);
+                    } catch (Exception e) {
+                        XposedBridge.log("[ERROR] " + e);
+                    }
+                }
+            });
+
+        } catch (ClassNotFoundException e) {
+            XposedBridge.log(packageName + ": 未找到okhttp");
+        } catch (Exception e) {
+            XposedBridge.log(packageName + ": Hook OkHttp 发生错误: " + e.getMessage());
+        }
+
+
+        // Hook okhttp3.RealCall.execute
+//            Class<?> RealCall = XposedHelpers.findClass("okhttp3.RealCall", classLoader);
+        //            Class<?> okhttpClass = Class.forName("okhttp3.OkHttpClient", false, classLoader);
 //            XposedBridge.hookAllMethods(okhttpClass, "newCall", new XC_MethodHook() {
 //                @Override
 //                protected void beforeHookedMethod(MethodHookParam methodHookParam) throws Throwable {
@@ -703,12 +817,6 @@ public class IntentCapture implements IXposedHookLoadPackage {
 //                    }
 //                }
 //            });
-//        } catch (ClassNotFoundException e) {
-//            XposedBridge.log(packageName + ": 未找到okhttp");
-//        } catch (Exception e) {
-//            XposedBridge.log(packageName + ": Hook OkHttp 发生错误: " + e.getMessage());
-//        }
-
     }
 
     /**
@@ -824,9 +932,4 @@ public class IntentCapture implements IXposedHookLoadPackage {
             }
         }, 0, 1000, TimeUnit.MILLISECONDS); // 初始延迟为0，每隔500ms执行一次
     }
-
-
 }
-
-
-//queryIntentActivitiesInternal Scheme: intent://home#Intent;scheme=damai;package=cn.damai;S.referrer=%23Intent%3Bcomponent%3Dcn.damai%2F.launcher.splash.SplashMainActivity%3Bend;i.DMNav_KRequestCodeReferrer=-1;S.HOMEPAGE_OUTER_URL=;end damai://home

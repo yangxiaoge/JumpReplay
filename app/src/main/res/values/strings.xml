@@ -49,4 +49,54 @@
         <item>系统应用</item>
     </string-array>
 
+    <string name="filter">过滤</string>
+    <string name="disabled_activity_label">禁用意图</string>
+    <string name="shortcut_activity_label">快捷方式</string>
+
+    <string name="version_current_latest">当前: v%1$s\n最新: v%2$s</string>
+    <string name="version_not_available">未获取到版本号</string>
+
+    <string name="action_language">语言</string>
+    <string name="dialog_select_language">选择语言</string>
+    <string name="lang_follow_system">跟随系统</string>
+    <string name="lang_simplified_chinese">简体中文</string>
+    <string name="lang_english">English</string>
+    <string name="lang_japan">日本語</string>
+    <string name="cancel">取消</string>
+
+    <string name="root_service_available">Root 服务可用</string>
+    <string name="root_service_unavailable">Root 服务不可用</string>
+    <string name="xposed_framework_available">Xposed 框架可用</string>
+    <string name="xposed_framework_unavailable">Xposed 框架不可用</string>
+
+    <string name="shizuku_service_available">Shizuku 服务可用</string>
+    <string name="shizuku_service_unauthorized">Shizuku 服务未授权</string>
+    <string name="shizuku_service_unavailable">Shizuku 服务不可用</string>
+
+    <string name="partial_features_unavailable">部分功能不可用</string>
+    <string name="partial_features_unavailable_lspatch">部分功能不可用（LSPatch 则忽略）</string>
+
+    <string name="shizuku_request_permission_hint">请点击卡片以请求权限</string>
+    <string name="shizuku_status_detail">API %1$d, %2$s(%3$d)</string>
+
+    <string name="connect">连接</string>
+    <string name="mode_adb">adb</string>
+    <string name="mode_root">root</string>
+    <string name="mode_unknown">未知</string>
+    <string name="all">所有</string>
+
+    <string name="filter_key">过滤字段</string>
+    <string name="add_key">添加 Key</string>
+    <string name="ok">确定</string>
+    <string name="key_false">Key 不能为空</string>
+    <string name="key_true">Key 已存在</string>
+    <string name="no">取消</string>
+    <string name="key_input_text">例如：title / data / FunctionCall</string>
+    <string name="is_not_list">当前没有可用分组</string>
+    <string name="not_favorites">无收藏</string>
+    <string name="empty_view_not">暂无数据</string>
+    <string name="empty_view_not_xposed_text">模块未激活! 如果使用了LSPatch 请忽略</string>
+    <string name="open_window_main_switch">打开悬浮窗(重启进程生效)</string>
+    <string name="window_sub_switch">模块悬浮窗开关</string>
+
 </resources>

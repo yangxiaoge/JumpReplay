@@ -10,7 +10,15 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.os.LocaleListCompat;
+import androidx.core.view.MenuProvider;
+import androidx.lifecycle.Lifecycle;
 import androidx.annotation.NonNull;
 import androidx.cardview.widget.CardView;
 import androidx.core.content.ContextCompat;
@@ -31,6 +39,20 @@ public class SetupFragment extends Fragment {
 
     private static final String TAG = "SetupFragment";
     private static final int REQUEST_CODE_SHIZUKU_PERMISSION = 1; // 请求权限的 request code
+
+    private static final String LANGUAGE_SYSTEM = "system";
+    private static final String[] LANGUAGE_TAGS = {"system", "zh-CN", "en", "jp"};
+
+    private final Shizuku.OnRequestPermissionResultListener shizukuPermissionListener =
+            (requestCode, grantResult) -> {
+                if (requestCode == REQUEST_CODE_SHIZUKU_PERMISSION) {
+                    PermissionManager.isShizukuPermissionGranted =
+                            grantResult == PackageManager.PERMISSION_GRANTED;
+                    updateShizukuUI();
+                    Log.d(TAG, "权限请求结果: " +
+                            (PermissionManager.isShizukuPermissionGranted ? "已授权" : "未授权"));
+                }
+            };
 
     private Map<String, Boolean> FloatWindowConfig;
 
@@ -60,18 +82,19 @@ public class SetupFragment extends Fragment {
 
         // 根据权限动态设置 Root 服务状态
         if (PermissionManager.isRootPermissionGranted) {
-            rootText.setText("Root 服务可用");
+            rootText.setText(R.string.root_service_available);
             rootIcon.setImageResource(R.drawable.baseline_check_circle_outline_24); // 成功图标
             rootCard.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_green)); // 成功背景
             rootDescription.setText("");
         } else {
-            rootText.setText("Root 服务不可用");
+            rootText.setText(R.string.root_service_unavailable);
             rootIcon.setImageResource(R.drawable.outline_cancel_24); // 错误图标
             rootCard.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red)); // 错误背景
-            rootDescription.setText("部分功能不可用");
+            rootDescription.setText(R.string.partial_features_unavailable);
         }
 
-        rootCard.setOnClickListener (v -> {});
+        rootCard.setOnClickListener(v -> {
+        });
 
         CardView xposedCard = view.findViewById(R.id.card_xposed_status);
         TextView xposedText = xposedCard.findViewById(R.id.xposed_text);
@@ -79,17 +102,18 @@ public class SetupFragment extends Fragment {
         TextView xposedDescription = view.findViewById(R.id.xposed_description);
         // 根据权限动态设置 Root 服务状态
         if (MainActivity.isXposed()) {
-            xposedText.setText("Xposed 框架可用");
+            xposedText.setText(R.string.xposed_framework_available);
             xposedIcon.setImageResource(R.drawable.baseline_check_circle_outline_24); // 成功图标
             xposedCard.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_green)); // 成功背景
             xposedDescription.setText("");
         } else {
-            xposedText.setText("Xposed 框架不可用");
+            xposedText.setText(R.string.xposed_framework_unavailable);
             xposedIcon.setImageResource(R.drawable.outline_cancel_24); // 错误图标
             xposedCard.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red)); // 错误背景
-            xposedDescription.setText("部分功能不可用(LSPatch则忽略)");
+            xposedDescription.setText(R.string.partial_features_unavailable_lspatch);
         }
-        xposedCard.setOnClickListener (v -> {});
+        xposedCard.setOnClickListener(v -> {
+        });
 
         return view;
     }
@@ -97,6 +121,23 @@ public class SetupFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
+        requireActivity().addMenuProvider(new MenuProvider() {
+            @Override
+            public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
+                menu.clear();
+                menuInflater.inflate(R.menu.setup_drawer, menu);
+            }
+
+            @Override
+            public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
+                if (menuItem.getItemId() == R.id.action_language) {
+                    showLanguageDialog();
+                    return true;
+                }
+                return false;
+            }
+        }, getViewLifecycleOwner(), Lifecycle.State.RESUMED);
 
         // 确保 UI 更新逻辑在视图创建后调用
         updateShizukuUI();
@@ -114,13 +155,7 @@ public class SetupFragment extends Fragment {
         });
 
         // 添加 Shizuku 权限结果监听器
-        Shizuku.addRequestPermissionResultListener((requestCode, grantResult) -> {
-            if (requestCode == REQUEST_CODE_SHIZUKU_PERMISSION) {
-                PermissionManager.isShizukuPermissionGranted = grantResult == PackageManager.PERMISSION_GRANTED;
-                updateShizukuUI();
-                Log.d(TAG, "权限请求结果: " + (PermissionManager.isShizukuPermissionGranted ? "已授权" : "未授权"));
-            }
-        });
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);
 
 
         // 获取主开关和子开关
@@ -128,7 +163,7 @@ public class SetupFragment extends Fragment {
         @SuppressLint("UseSwitchCompatOrMaterialCode") Switch subSwitch = view.findViewById(R.id.float_window_sub_switch);
 
         mainSwitch.setChecked(Boolean.TRUE.equals(FloatWindowConfig.get("float_window")));
-        if (mainSwitch.isChecked()){
+        if (mainSwitch.isChecked()) {
             subSwitch.setEnabled(true);
         }
         subSwitch.setChecked(Boolean.TRUE.equals(FloatWindowConfig.get("my_float_window")));
@@ -151,8 +186,7 @@ public class SetupFragment extends Fragment {
     public void onDestroyView() {
         super.onDestroyView();
         // 移除监听器以避免内存泄漏
-        Shizuku.removeRequestPermissionResultListener((requestCode, grantResult) -> {
-        });
+        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);
     }
 
     /**
@@ -160,28 +194,102 @@ public class SetupFragment extends Fragment {
      */
     @SuppressLint("SetTextI18n")
     private void updateShizukuUI() {
-        if (PermissionManager.isBinderAvailable) { // 检查 Shizuku 服务是否可用
+        if (PermissionManager.isBinderAvailable) {
             if (PermissionManager.isShizukuPermissionGranted) {
-                // Shizuku 已授权
-                shizukuText.setText("Shizuku 服务可用");
-                shizukuIcon.setImageResource(R.drawable.baseline_check_circle_outline_24); // 成功图标
-                shizukuCard.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_green)); // 成功背景
+                shizukuText.setText(R.string.shizuku_service_available);
+                shizukuIcon.setImageResource(R.drawable.baseline_check_circle_outline_24);
+                shizukuCard.setCardBackgroundColor(
+                        ContextCompat.getColor(requireContext(), R.color.light_green)
+                );
+
                 int shizukuUid = Shizuku.getUid();
-                String ShizukuMode = shizukuUid == 2000 ? "adb" : ( shizukuUid == 0) ? "root" : "未知";
-                shizukuDescription.setText("API " + Shizuku.getVersion() + ", " + ShizukuMode + "(" + shizukuUid + ")");
+                String shizukuMode = shizukuUid == 2000
+                        ? getString(R.string.mode_adb)
+                        : (shizukuUid == 0
+                        ? getString(R.string.mode_root)
+                        : getString(R.string.mode_unknown));
+
+                shizukuDescription.setText(
+                        getString(
+                                R.string.shizuku_status_detail,
+                                Shizuku.getVersion(),
+                                shizukuMode,
+                                shizukuUid
+                        )
+                );
             } else {
-                // Shizuku 未授权
-                shizukuText.setText("Shizuku 服务未授权");
-                shizukuIcon.setImageResource(R.drawable.outline_cancel_24); // 错误图标
-                shizukuCard.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red)); // 错误背景
-                shizukuDescription.setText("请长按卡片以请求权限");
+                shizukuText.setText(R.string.shizuku_service_unauthorized);
+                shizukuIcon.setImageResource(R.drawable.outline_cancel_24);
+                shizukuCard.setCardBackgroundColor(
+                        ContextCompat.getColor(requireContext(), R.color.light_red)
+                );
+                shizukuDescription.setText(R.string.shizuku_request_permission_hint);
             }
         } else {
-            // Shizuku 服务不可用
-            shizukuText.setText("Shizuku 服务不可用");
-            shizukuIcon.setImageResource(R.drawable.outline_cancel_24); // 错误图标
-            shizukuCard.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red)); // 错误背景
-            shizukuDescription.setText("部分功能不可用");
+            shizukuText.setText(R.string.shizuku_service_unavailable);
+            shizukuIcon.setImageResource(R.drawable.outline_cancel_24);
+            shizukuCard.setCardBackgroundColor(
+                    ContextCompat.getColor(requireContext(), R.color.light_red)
+            );
+            shizukuDescription.setText(R.string.partial_features_unavailable);
+        }
+    }
+
+
+    private void showLanguageDialog() {
+        String[] labels = new String[]{
+                getString(R.string.lang_follow_system),
+                getString(R.string.lang_simplified_chinese),
+                getString(R.string.lang_english),
+                getString(R.string.lang_japan),
+        };
+
+        int checkedItem = findLanguageIndex(getCurrentLanguageTag());
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.dialog_select_language)
+                .setSingleChoiceItems(labels, checkedItem, (dialog, which) -> {
+                    applyLanguage(LANGUAGE_TAGS[which]);
+                    dialog.dismiss();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private String getCurrentLanguageTag() {
+        LocaleListCompat locales = AppCompatDelegate.getApplicationLocales();
+        if (locales == null || locales.isEmpty()) {
+            return LANGUAGE_SYSTEM;
+        }
+
+        String tag = locales.toLanguageTags();
+        if (tag == null || tag.isEmpty()) {
+            return LANGUAGE_SYSTEM;
+        }
+
+        if (tag.startsWith("zh")) {
+            return "zh-CN";
+        }
+        if (tag.startsWith("en")) {
+            return "en";
+        }
+        return LANGUAGE_SYSTEM;
+    }
+
+    private int findLanguageIndex(String tag) {
+        for (int i = 0; i < LANGUAGE_TAGS.length; i++) {
+            if (LANGUAGE_TAGS[i].equals(tag)) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    private void applyLanguage(String tag) {
+        if (LANGUAGE_SYSTEM.equals(tag)) {
+            AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList());
+        } else {
+            AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag));
         }
     }
 }

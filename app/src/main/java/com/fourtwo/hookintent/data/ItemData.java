@@ -6,7 +6,7 @@ import android.os.Parcel;
 import android.os.Parcelable;
 
 public class ItemData implements Parcelable {
-    private Drawable icon; // Drawable 类型无法直接序列化
+    private Drawable icon;
     private final String appName;
     private final String item_from;
     private final String item_data;
@@ -17,32 +17,35 @@ public class ItemData implements Parcelable {
     private final String stack_trace;
     private final String uri;
 
-    // 构造函数
-    public ItemData(Drawable icon, String appName, String item_from, String item_data, String timestamp, String dataSize, Bundle bundle, String category, String stack_trace, String uri) {
-        this.icon = icon;
-        this.appName = appName;
-        this.item_from = item_from;
-        this.item_data = item_data;
-        this.timestamp = timestamp;
-        this.dataSize = dataSize;
-        this.bundle = bundle;
-        this.category = category;
-        this.stack_trace = stack_trace;
-        this.uri = uri;
+    private static String safe(String value) {
+        return value == null ? "" : value;
     }
 
-    // Parcelable 构造函数
+    public ItemData(Drawable icon, String appName, String item_from, String item_data,
+                    String timestamp, String dataSize, Bundle bundle, String category,
+                    String stack_trace, String uri) {
+        this.icon = icon;
+        this.appName = safe(appName);
+        this.item_from = safe(item_from);
+        this.item_data = safe(item_data);
+        this.timestamp = safe(timestamp);
+        this.dataSize = safe(dataSize);
+        this.bundle = bundle;
+        this.category = safe(category);
+        this.stack_trace = safe(stack_trace);
+        this.uri = safe(uri);
+    }
+
     protected ItemData(Parcel in) {
-        // Note: Drawable can't be directly parcelled, consider storing it another way
-        appName = in.readString();
-        item_from = in.readString();
-        item_data = in.readString();
-        timestamp = in.readString();
-        category = in.readString();
-        dataSize = in.readString();
+        appName = safe(in.readString());
+        item_from = safe(in.readString());
+        item_data = safe(in.readString());
+        timestamp = safe(in.readString());
+        category = safe(in.readString());
+        dataSize = safe(in.readString());
         bundle = in.readBundle(getClass().getClassLoader());
-        stack_trace = in.readString();
-        uri = in.readString();
+        stack_trace = safe(in.readString());
+        uri = safe(in.readString());
     }
 
     public static final Creator<ItemData> CREATOR = new Creator<ItemData>() {
@@ -64,7 +67,6 @@ public class ItemData implements Parcelable {
 
     @Override
     public void writeToParcel(Parcel parcel, int i) {
-        // Note: Drawable can't be directly parcelled, consider storing it another way
         parcel.writeString(appName);
         parcel.writeString(item_from);
         parcel.writeString(item_data);
@@ -76,11 +78,9 @@ public class ItemData implements Parcelable {
         parcel.writeString(uri);
     }
 
-    // Getters and setters
     public Drawable getIcon() {
         return icon;
     }
-
 
     public String getAppName() {
         return appName;

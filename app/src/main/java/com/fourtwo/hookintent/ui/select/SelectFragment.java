@@ -26,6 +26,7 @@ import com.fourtwo.hookintent.base.JsonHandler;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 
 public class SelectFragment extends Fragment {
 
@@ -114,14 +115,20 @@ public class SelectFragment extends Fragment {
         Log.d(TAG, "jsonData: " + jsonData);
 
         Map<String, Object> protocolData = JsonHandler.getFilterKeyJson(jsonData.get(protocol));
-//        Map<String, Object> protocolData = (Map<String, Object>) jsonData.get(protocol);
         Log.d(TAG, "onCreateView: " + jsonData.get(protocol));
+
         if (protocolData == null) {
-            Log.e(TAG, "Protocol data is null " + jsonData + " for protocol: " + protocol);
-            return null; // 或适当地处理此情况
+            protocolData = new HashMap<>();
+            jsonData.put(protocol, protocolData);
         }
 
         List<Map<String, Object>> nameData = JsonHandler.getFilterValueJson(protocolData.get(name));
+        if (nameData == null) {
+            nameData = new ArrayList<>();
+            protocolData.put(name, nameData);
+            jsonHandler.writeJsonToFile(requireContext(), jsonData);
+        }
+
         Log.d(TAG, "onCreateView: " + name + " " + protocol + " " + nameData);
 
         View view = inflater.inflate(R.layout.fragment_select, container, false);
@@ -148,13 +155,14 @@ public class SelectFragment extends Fragment {
         String name = getArguments().getString("NAME");
         String protocol = getArguments().getString("PROTOCOL");
         Map<String, Object> protocolData = JsonHandler.getFilterKeyJson(jsonData.get(protocol));
-        if (protocolData != null) {
-            protocolData.put(name, dataWithCheckStates);
-            Log.d(TAG, "onPause: " + jsonData);
-            jsonHandler.writeJsonToFile(requireContext(), jsonData);
-        } else {
-            Log.e(TAG, "Protocol data is null " + jsonData + " for protocol: " + protocol);
+        if (protocolData == null) {
+            protocolData = new HashMap<>();
+            jsonData.put(protocol, protocolData);
         }
+
+        protocolData.put(name, dataWithCheckStates);
+        Log.d(TAG, "onPause: " + jsonData);
+        jsonHandler.writeJsonToFile(requireContext(), jsonData);
     }
 }
 

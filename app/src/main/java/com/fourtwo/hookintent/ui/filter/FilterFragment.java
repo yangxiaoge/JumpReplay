@@ -1,94 +1,384 @@
 package com.fourtwo.hookintent.ui.filter;
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
+import androidx.core.view.MenuProvider;
 import androidx.fragment.app.Fragment;
-import androidx.navigation.NavController;
-import androidx.navigation.Navigation;
+import androidx.lifecycle.Lifecycle;
+import androidx.navigation.fragment.NavHostFragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.fourtwo.hookintent.R;
+import com.fourtwo.hookintent.base.JsonHandler;
+import com.fourtwo.hookintent.data.Constants;
+import com.fourtwo.hookintent.utils.SharedPreferencesUtils;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class FilterFragment extends Fragment {
 
+    private static final String LEGACY_INTENT_KEY = "intent";
+    private static final String LEGACY_SCHEME_KEY = "scheme";
+
+    private static final String FIELD_FUNCTION_CALL = "FunctionCall";
+    private static final String FIELD_FROM = "from";
+    private static final String FIELD_SCHEME = "scheme";
+
     private RecyclerView recyclerView;
     private FilterAdapter adapter;
-    private String currentProtocol; // 用于存储当前被点击的按钮
+    private LinearLayout buttonContainer;
+
+    private final JsonHandler jsonHandler = new JsonHandler();
+    private Map<String, Object> jsonData = new HashMap<>();
+
+    private String currentProtocol;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_filter, container, false);
 
+        buttonContainer = view.findViewById(R.id.button_container);
 
         recyclerView = view.findViewById(R.id.list);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        List<String> initialData = new ArrayList<>();
-        adapter = new FilterAdapter(initialData, this::goSelect);
+        adapter = new FilterAdapter(new ArrayList<>(), this::goSelect);
         recyclerView.setAdapter(adapter);
-
-        Button buttonIntent = view.findViewById(R.id.button_intent);
-        Button buttonScheme = view.findViewById(R.id.button_scheme);
-
-        View.OnClickListener filterButtonClickListener = v -> {
-            Button button = (Button) v;
-            String protocol = button.getText().toString();
-            currentProtocol = protocol.toLowerCase(); // 更新当前协议
-            filterContent(protocol);
-
-            // 更新按钮的选中状态和颜色
-            if (button.getId() == R.id.button_intent) {
-                buttonIntent.setSelected(true);
-                buttonScheme.setSelected(false);
-
-                buttonIntent.setTextColor(getResources().getColor(R.color.white));
-                buttonScheme.setTextColor(getResources().getColor(R.color.black));
-            } else if (button.getId() == R.id.button_scheme) {
-                buttonIntent.setSelected(false);
-                buttonScheme.setSelected(true);
-
-                buttonIntent.setTextColor(getResources().getColor(R.color.black));
-                buttonScheme.setTextColor(getResources().getColor(R.color.white));
-            }
-        };
-
-
-        buttonIntent.setOnClickListener(filterButtonClickListener);
-        buttonScheme.setOnClickListener(filterButtonClickListener);
 
         return view;
     }
 
-    private void filterContent(String protocol) {
-        List<String> filteredData = new ArrayList<>();
-        filteredData.add("FunctionCall");
-        filteredData.add("from");
-        switch (protocol) {
-            case "Intent":
-                break;
-            case "Scheme":
-                filteredData.add("scheme");
-                break;
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        requireActivity().addMenuProvider(new MenuProvider() {
+            @Override
+            public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
+                menu.clear();
+                menuInflater.inflate(R.menu.select_drawer, menu);
+            }
+
+            @Override
+            public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
+                if (menuItem.getItemId() == R.id.add_text) {
+                    showAddKeyDialog();
+                    return true;
+                }
+                return false;
+            }
+        }, getViewLifecycleOwner(), Lifecycle.State.RESUMED);
+
+        reloadAndRender();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        reloadAndRender();
+    }
+
+    private void reloadAndRender() {
+        loadFilterData();
+
+        boolean changed = syncFilterGroups();
+
+        List<String> protocolKeys = buildProtocolKeys();
+        if (currentProtocol == null || !protocolKeys.contains(currentProtocol)) {
+            currentProtocol = protocolKeys.isEmpty() ? null : protocolKeys.get(0);
         }
-        adapter.updateData(filteredData);
+
+        renderProtocolButtons(protocolKeys);
+        refreshFieldList();
+
+        if (changed) {
+            saveFilterData();
+        }
+    }
+
+    private void loadFilterData() {
+        Map<String, Object> data = jsonHandler.readJsonFromFile(requireContext());
+        jsonData = data != null ? data : new HashMap<>();
+    }
+
+    private void saveFilterData() {
+        jsonHandler.writeJsonToFile(requireContext(), jsonData);
+    }
+
+    /**
+     * 过滤分组 = 内建 intent/scheme + Settings category。
+     * 这里只自动补，不自动删，避免误删已有过滤规则。
+     */
+    private boolean syncFilterGroups() {
+        boolean changed = false;
+
+        changed |= ensureBuiltInGroup(LEGACY_INTENT_KEY, FIELD_FUNCTION_CALL, FIELD_FROM);
+        changed |= ensureBuiltInGroup(LEGACY_SCHEME_KEY, FIELD_FUNCTION_CALL, FIELD_FROM, FIELD_SCHEME);
+
+        for (String settingsGroup : getSettingsGroupKeys()) {
+            if (isBuiltInGroup(settingsGroup)) {
+                continue;
+            }
+            changed |= ensureCustomGroup(settingsGroup);
+        }
+
+        return changed;
+    }
+
+    private boolean ensureBuiltInGroup(String groupKey, String... fieldKeys) {
+        boolean changed = false;
+
+        Map<String, Object> groupData = JsonHandler.getFilterKeyJson(jsonData.get(groupKey));
+        if (groupData == null) {
+            groupData = new HashMap<>();
+            jsonData.put(groupKey, groupData);
+            changed = true;
+        }
+
+        for (String fieldKey : fieldKeys) {
+            Object value = groupData.get(fieldKey);
+            if (!(value instanceof List)) {
+                groupData.put(fieldKey, new ArrayList<Map<String, Object>>());
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private boolean ensureCustomGroup(String groupKey) {
+        Map<String, Object> groupData = JsonHandler.getFilterKeyJson(jsonData.get(groupKey));
+        if (groupData != null) {
+            return false;
+        }
+
+        jsonData.put(groupKey, new HashMap<String, Object>());
+        return true;
+    }
+
+    private List<String> getSettingsGroupKeys() {
+        String colorsJson = SharedPreferencesUtils.getStr(requireContext(), Constants.COLORS_CONFIG);
+        if (colorsJson == null || colorsJson.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        Map<String, String> colorMap = JsonHandler.jsonToMap(colorsJson);
+        List<String> result = new ArrayList<>();
+
+        for (String rawCategory : colorMap.keySet()) {
+            String normalized = normalizeGroupKey(rawCategory);
+            if (normalized != null && !normalized.isEmpty()) {
+                result.add(normalized);
+            }
+        }
+
+        return result;
+    }
+
+    private String normalizeGroupKey(String rawCategory) {
+        if (rawCategory == null) {
+            return null;
+        }
+
+        String category = rawCategory.trim();
+        if (category.isEmpty()) {
+            return null;
+        }
+
+        if ("Intent".equalsIgnoreCase(category)) {
+            return LEGACY_INTENT_KEY;
+        }
+
+        if ("Scheme".equalsIgnoreCase(category)) {
+            return LEGACY_SCHEME_KEY;
+        }
+
+        return category;
+    }
+
+    private boolean isBuiltInGroup(String groupKey) {
+        return LEGACY_INTENT_KEY.equalsIgnoreCase(groupKey)
+                || LEGACY_SCHEME_KEY.equalsIgnoreCase(groupKey);
+    }
+
+    private List<String> buildProtocolKeys() {
+        List<String> result = new ArrayList<>();
+
+        if (jsonData.containsKey(LEGACY_INTENT_KEY)) {
+            result.add(LEGACY_INTENT_KEY);
+        }
+
+        if (jsonData.containsKey(LEGACY_SCHEME_KEY)) {
+            result.add(LEGACY_SCHEME_KEY);
+        }
+
+        Set<String> customKeys = new LinkedHashSet<>();
+
+        List<String> mergedKeys = new ArrayList<>();
+        mergedKeys.addAll(getSettingsGroupKeys());
+        mergedKeys.addAll(jsonData.keySet());
+        Collections.sort(mergedKeys, String.CASE_INSENSITIVE_ORDER);
+
+        for (String key : mergedKeys) {
+            if (!isBuiltInGroup(key)) {
+                customKeys.add(key);
+            }
+        }
+
+        result.addAll(customKeys);
+        return result;
+    }
+
+    private void renderProtocolButtons(List<String> protocolKeys) {
+        buttonContainer.removeAllViews();
+
+        for (String protocolKey : protocolKeys) {
+            Button button = new Button(requireContext());
+            button.setTag(protocolKey);
+            button.setText(getProtocolDisplayName(protocolKey));
+            button.setAllCaps(false);
+            button.setBackgroundResource(R.drawable.button_background_selector);
+            button.setTextColor(ContextCompat.getColor(requireContext(), R.color.black));
+
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            params.setMargins(0, 0, dpToPx(8), 0);
+            button.setLayoutParams(params);
+
+            button.setOnClickListener(v -> {
+                currentProtocol = protocolKey;
+                refreshFieldList();
+            });
+
+            buttonContainer.addView(button);
+        }
+
+        updateProtocolButtons();
+    }
+
+    private void refreshFieldList() {
+        List<String> fieldKeys = new ArrayList<>();
+
+        if (currentProtocol != null) {
+            Map<String, Object> groupData = JsonHandler.getFilterKeyJson(jsonData.get(currentProtocol));
+            if (groupData != null) {
+                fieldKeys.addAll(groupData.keySet());
+                Collections.sort(fieldKeys, String.CASE_INSENSITIVE_ORDER);
+            }
+        }
+
+        adapter.updateData(fieldKeys);
+        updateProtocolButtons();
+    }
+
+    private void updateProtocolButtons() {
+        for (int i = 0; i < buttonContainer.getChildCount(); i++) {
+            View child = buttonContainer.getChildAt(i);
+            if (!(child instanceof Button)) {
+                continue;
+            }
+
+            Button button = (Button) child;
+            String protocolKey = (String) button.getTag();
+            boolean selected = protocolKey != null && protocolKey.equals(currentProtocol);
+
+            button.setSelected(selected);
+            button.setTextColor(ContextCompat.getColor(
+                    requireContext(),
+                    selected ? R.color.white : R.color.black
+            ));
+        }
+    }
+
+    private String getProtocolDisplayName(String protocolKey) {
+        if (LEGACY_INTENT_KEY.equalsIgnoreCase(protocolKey)) {
+            return "Intent";
+        }
+
+        if (LEGACY_SCHEME_KEY.equalsIgnoreCase(protocolKey)) {
+            return "Scheme";
+        }
+
+        return protocolKey;
+    }
+
+    @SuppressLint("SetTextI18n")
+    private void showAddKeyDialog() {
+        if (currentProtocol == null || currentProtocol.trim().isEmpty()) {
+            Toast.makeText(requireContext(), getString(R.string.is_not_list), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final EditText input = new EditText(requireContext());
+        input.setHint(getString(R.string.key_input_text));
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle(getString(R.string.add_key))
+                .setView(input)
+                .setPositiveButton(getString(R.string.ok), (dialog, which) -> {
+                    String newKey = input.getText().toString().trim();
+                    if (newKey.isEmpty()) {
+                        Toast.makeText(requireContext(), getString(R.string.key_false), Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    Map<String, Object> groupData = JsonHandler.getFilterKeyJson(jsonData.get(currentProtocol));
+                    if (groupData == null) {
+                        groupData = new HashMap<>();
+                        jsonData.put(currentProtocol, groupData);
+                    }
+
+                    if (groupData.containsKey(newKey)) {
+                        Toast.makeText(requireContext(), getString(R.string.key_true), Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    groupData.put(newKey, new ArrayList<Map<String, Object>>());
+                    saveFilterData();
+                    refreshFieldList();
+                })
+                .setNegativeButton(getString(R.string.no), null)
+                .show();
     }
 
     private void goSelect(String item) {
-        NavController navController = Navigation.findNavController(requireActivity(), R.id.list);
+        if (currentProtocol == null || currentProtocol.isEmpty()) {
+            return;
+        }
+
         Bundle bundle = new Bundle();
         bundle.putString("NAME", item);
-        bundle.putString("PROTOCOL", currentProtocol); // 添加协议信息到 Bundle
-        navController.navigate(R.id.nav_select, bundle);
+        bundle.putString("PROTOCOL", currentProtocol);
+
+        NavHostFragment.findNavController(this).navigate(R.id.nav_select, bundle);
+    }
+
+    private int dpToPx(int dp) {
+        return Math.round(dp * getResources().getDisplayMetrics().density);
     }
 }

@@ -7,42 +7,24 @@
     android:padding="16dp"
     android:background="?android:attr/windowBackground">
 
-    <!-- 协议选择按钮 -->
-    <LinearLayout
-        android:orientation="horizontal"
+    <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center"
+        android:scrollbars="none"
         android:paddingBottom="16dp">
 
-        <Button
-            android:id="@+id/button_intent"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:id="@+id/button_container"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Intent"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/button_background_selector"
-            android:textColor="@color/black" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical" />
+    </HorizontalScrollView>
 
-        <Button
-            android:id="@+id/button_scheme"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Scheme"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/button_background_selector"
-            android:textColor="@color/black" />
-
-
-    </LinearLayout>
-
-    <!-- 过滤选项列表 -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="过滤选项"
+        android:text="@string/filter_key"
         android:textSize="18sp"
         android:textStyle="bold"
         android:layout_marginBottom="8dp"
@@ -53,5 +35,5 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        tools:itemCount="0"/>
+        tools:itemCount="3" />
 </LinearLayout>

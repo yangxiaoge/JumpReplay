@@ -216,7 +216,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="10dp"
                 android:textSize="14sp"
-                android:text="打开悬浮窗(重启进程生效)"
+                android:text="@string/open_window_main_switch"
                 tools:ignore="UseSwitchCompatOrMaterialXml" />
 
             <Switch
@@ -226,7 +226,7 @@
                 android:layout_marginStart="20dp"
                 android:textSize="12sp"
                 android:enabled="false"
-                android:text="模块悬浮窗开关"
+                android:text="@string/window_sub_switch"
                 tools:ignore="UseSwitchCompatOrMaterialXml" />
 
         </LinearLayout>

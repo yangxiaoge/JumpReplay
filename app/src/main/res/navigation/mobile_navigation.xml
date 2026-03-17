@@ -35,7 +35,7 @@
     <fragment
         android:id="@+id/nav_settings"
         android:name="com.fourtwo.hookintent.ui.settings.SettingsFragment"
-        android:label="配置"
+        android:label="@string/settings"
         tools:layout="@layout/fragment_settings" />
 
     <fragment
@@ -47,13 +47,13 @@
     <fragment
         android:id="@+id/nav_filter"
         android:name="com.fourtwo.hookintent.ui.filter.FilterFragment"
-        android:label="过滤"
+        android:label="@string/filter"
         tools:layout="@layout/fragment_filter" />
 
     <fragment
         android:id="@+id/nav_setup"
         android:name="com.fourtwo.hookintent.ui.setup.SetupFragment"
-        android:label="设置"
+        android:label="@string/setup"
         tools:layout="@layout/fragment_select" />
 
     <fragment
