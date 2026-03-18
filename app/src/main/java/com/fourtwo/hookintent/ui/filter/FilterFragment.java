@@ -135,14 +135,34 @@ public class FilterFragment extends Fragment {
     private boolean syncFilterGroups() {
         boolean changed = false;
 
+        Set<String> allowedGroups = new LinkedHashSet<>();
+        allowedGroups.add(LEGACY_INTENT_KEY);
+        allowedGroups.add(LEGACY_SCHEME_KEY);
+        allowedGroups.addAll(getSettingsGroupKeys());
+
         changed |= ensureBuiltInGroup(LEGACY_INTENT_KEY, FIELD_FUNCTION_CALL, FIELD_FROM);
         changed |= ensureBuiltInGroup(LEGACY_SCHEME_KEY, FIELD_FUNCTION_CALL, FIELD_FROM, FIELD_SCHEME);
 
-        for (String settingsGroup : getSettingsGroupKeys()) {
-            if (isBuiltInGroup(settingsGroup)) {
+        for (String groupKey : allowedGroups) {
+            if (isBuiltInGroup(groupKey)) {
                 continue;
             }
-            changed |= ensureCustomGroup(settingsGroup);
+            changed |= ensureCustomGroup(groupKey);
+        }
+
+        List<String> staleGroups = new ArrayList<>();
+        for (String storedKey : jsonData.keySet()) {
+            if (isBuiltInGroup(storedKey)) {
+                continue;
+            }
+            if (!allowedGroups.contains(storedKey)) {
+                staleGroups.add(storedKey);
+            }
+        }
+
+        for (String staleGroup : staleGroups) {
+            jsonData.remove(staleGroup);
+            changed = true;
         }
 
         return changed;
@@ -180,22 +200,26 @@ public class FilterFragment extends Fragment {
     }
 
     private List<String> getSettingsGroupKeys() {
-        String colorsJson = SharedPreferencesUtils.getStr(requireContext(), Constants.COLORS_CONFIG);
-        if (colorsJson == null || colorsJson.trim().isEmpty()) {
-            return new ArrayList<>();
+        Set<String> result = new LinkedHashSet<>();
+        collectGroupKeysFromPreference(Constants.INTERNAL_HOOKS_CONFIG, result);
+        collectGroupKeysFromPreference(Constants.EXTERNAL_HOOKS_CONFIG, result);
+        return new ArrayList<>(result);
+    }
+
+    private void collectGroupKeysFromPreference(String prefKey, Set<String> out) {
+        String config = SharedPreferencesUtils.getStr(requireContext(), prefKey);
+        if (config == null || config.trim().isEmpty() || "null".equals(config) || "\"null\"".equals(config)) {
+            return;
         }
 
-        Map<String, String> colorMap = JsonHandler.jsonToMap(colorsJson);
-        List<String> result = new ArrayList<>();
-
-        for (String rawCategory : colorMap.keySet()) {
+        List<Map<String, Object>> records = JsonHandler.deserializeHookedRecords(config);
+        for (Map<String, Object> item : records) {
+            String rawCategory = (String) item.get("category");
             String normalized = normalizeGroupKey(rawCategory);
             if (normalized != null && !normalized.isEmpty()) {
-                result.add(normalized);
+                out.add(normalized);
             }
         }
-
-        return result;
     }
 
     private String normalizeGroupKey(String rawCategory) {
@@ -235,20 +259,16 @@ public class FilterFragment extends Fragment {
             result.add(LEGACY_SCHEME_KEY);
         }
 
-        Set<String> customKeys = new LinkedHashSet<>();
-
-        List<String> mergedKeys = new ArrayList<>();
-        mergedKeys.addAll(getSettingsGroupKeys());
-        mergedKeys.addAll(jsonData.keySet());
-        Collections.sort(mergedKeys, String.CASE_INSENSITIVE_ORDER);
-
-        for (String key : mergedKeys) {
+        List<String> customKeys = new ArrayList<>();
+        for (String key : jsonData.keySet()) {
             if (!isBuiltInGroup(key)) {
                 customKeys.add(key);
             }
         }
 
+        Collections.sort(customKeys, String.CASE_INSENSITIVE_ORDER);
         result.addAll(customKeys);
+
         return result;
     }
 

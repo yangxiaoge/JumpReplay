@@ -96,4 +96,5 @@
     <string name="empty_view_not_xposed_text">Module not activated! If using LSPatch, please ignore this</string>
     <string name="open_window_main_switch">Open floating window (restart process to take effect)</string>
     <string name="window_sub_switch">Module floating window switch</string>
+    <string name="pick_color">选择颜色</string>
 </resources>

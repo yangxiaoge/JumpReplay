@@ -1,37 +1,102 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- General -->
-    <string name="positive_button">OK</string>
-    <string name="negative_button">キャンセル</string>
-    <string name="action_settings">もっと多くのオプション</string>
+    <string name="app_name">JumpReplay</string>
+    <string name="nav_header_subtitle">https://github.com/FourTwooo/JumpReplay</string>
+    <string name="action_settings">その他のオプション</string>
     <string name="action_delete">クリア</string>
+
     <string name="menu_home">キャプチャ</string>
     <string name="menu_detail">詳細内容</string>
     <string name="menu_gallery">お気に入り</string>
-    <string name="menu_me">概要</string>
-    <string name="empty_view">ボタンをクリックしてHOOKを開始</string>
+    <string name="menu_me">このアプリについて</string>
+
+    <string name="empty_view">ボタンをクリックしてHOOKを有効にする</string>
     <string name="copy_code">コマンドをコピー</string>
+
     <string name="add_text">追加</string>
     <string name="delete">削除</string>
     <string name="todo">TODO</string>
     <string name="activity_label">インテントインターセプター</string>
     <string name="menu_intercept">インテントインターセプター</string>
     <string name="search">検索</string>
-    <string name="activity">アクティビティ</string>
+    <string name="activity">Activity</string>
     <string name="reset_intent">初期値にリセット</string>
     <string name="send_intent">インテントを送信</string>
     <string name="intent_app_name">アプリ名</string>
-    <string name="intent_app_activity">com.example.app</string>
-    <string name="match_apps">一致するアプリ:</string>
+    <string name="intent_app_activity">com.example.app\ncom.example.app.MainActivity</string>
+    <string name="match_apps">一致するアプリ: </string>
     <string name="copy_am_code">コピー</string>
-    <string name="call_su_code">呼び出し</string>
+    <string name="call_su_code">実行</string>
     <string name="is_root">rootを使用</string>
     <string name="star">お気に入り</string>
     <string name="settings">設定</string>
+    <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
-    <string name="disabled">無効化</string>
+    <string name="disabled">無効</string>
     <string name="add_link">ショートカットを作成</string>
     <string name="setup">設定</string>
-    <string name="float_window">フローティングウィンドウ（プロセス再起動後に有効）</string>
+    <string name="float_window">フローティングウィンドウ（プロセスの再起動で有効）</string>
+
+    <string-array name="items_array">
+        <item>root</item>
+        <item>Shizuku</item>
+        <item>Shizuku - システムアシスタント</item>
+    </string-array>
+
+    <string-array name="packages_array">
+        <item>すべてのアプリ</item>
+        <item>ユーザーアプリ</item>
+        <item>システムアプリ</item>
+    </string-array>
+
+    <string name="filter">フィルター</string>
+    <string name="disabled_activity_label">インテントを無効化</string>
+    <string name="shortcut_activity_label">ショートカット</string>
+
+    <string name="version_current_latest">現在: v%1$s\n最新: v%2$s</string>
+    <string name="version_not_available">バージョン情報を取得できませんでした</string>
+
+    <string name="action_language">言語</string>
+    <string name="dialog_select_language">言語を選択</string>
+    <string name="lang_follow_system">システムに従う</string>
+    <string name="lang_simplified_chinese">简体中文</string>
+    <string name="lang_english">English</string>
+    <string name="lang_japan">日本語</string>
+    <string name="cancel">キャンセル</string>
+
+    <string name="root_service_available">Rootサービスが利用可能です</string>
+    <string name="root_service_unavailable">Rootサービスが利用できません</string>
+    <string name="xposed_framework_available">Xposedフレームワークが利用可能です</string>
+    <string name="xposed_framework_unavailable">Xposedフレームワークが利用できません</string>
+
+    <string name="shizuku_service_available">Shizukuサービスが利用可能です</string>
+    <string name="shizuku_service_unauthorized">Shizukuサービスが未許可です</string>
+    <string name="shizuku_service_unavailable">Shizukuサービスが利用できません</string>
+
+    <string name="partial_features_unavailable">一部の機能が利用できません</string>
+    <string name="partial_features_unavailable_lspatch">一部の機能が利用できません（LSPatchの場合は無視）</string>
+
+    <string name="shizuku_request_permission_hint">カードをクリックして権限をリクエストしてください</string>
+    <string name="shizuku_status_detail">API %1$d, %2$s(%3$d)</string>
+
+    <string name="connect">接続</string>
+    <string name="mode_adb">adb</string>
+    <string name="mode_root">root</string>
+    <string name="mode_unknown">不明</string>
+    <string name="all">すべて</string>
+
+    <string name="filter_key">フィルターフィールド</string>
+    <string name="add_key">Keyを追加</string>
+    <string name="ok">OK</string>
+    <string name="key_false">Keyは空にできません</string>
+    <string name="key_true">Keyは既に存在します</string>
+    <string name="no">キャンセル</string>
+    <string name="key_input_text">例：title / data / FunctionCall</string>
+    <string name="is_not_list">利用可能なグループがありません</string>
+    <string name="not_favorites">お気に入りはありません</string>
+    <string name="empty_view_not">データがありません</string>
+    <string name="empty_view_not_xposed_text">モジュールが有効になっていません！LSPatchを使用している場合は無視してください</string>
+    <string name="open_window_main_switch">フローティングウィンドウを開く（プロセスの再起動で有効）</string>
+    <string name="window_sub_switch">モジュールのフローティングウィンドウスイッチ</string>
+    <string name="pick_color">选择颜色</string>
 
 </resources>

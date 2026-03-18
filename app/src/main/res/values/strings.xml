@@ -98,5 +98,6 @@
     <string name="empty_view_not_xposed_text">模块未激活! 如果使用了LSPatch 请忽略</string>
     <string name="open_window_main_switch">打开悬浮窗(重启进程生效)</string>
     <string name="window_sub_switch">模块悬浮窗开关</string>
+    <string name="pick_color">选择颜色</string>
 
 </resources>

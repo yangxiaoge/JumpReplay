@@ -140,13 +140,33 @@ public class SettingsFragment extends Fragment {
         builder.setTitle("操作标签")
                 .setItems(new String[]{"删除", "编辑"}, (dialog, which) -> {
                     if (which == 0) {
-                        // 删除标签
-                        categoryData.remove(position); // 从列表中移除
-                        Map<String, String> COLORS = JsonHandler.jsonToMap(SharedPreferencesUtils.getStr(requireContext(), Constants.COLORS_CONFIG));
-                        COLORS.remove(category); // 从 SharedPreferences 中移除
-                        SharedPreferencesUtils.putStr(requireContext(), Constants.COLORS_CONFIG, JsonHandler.mapToJson(COLORS));
+                        if (isBuiltInCategory(category)) {
+                            Toast.makeText(requireContext(), "内建标签不能删除", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        if (isCategoryReferenced(category)) {
+                            Toast.makeText(requireContext(), "该标签仍被规则使用，请先修改或删除对应规则", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        categoryData.remove(position);
+
+                        Map<String, String> COLORS = JsonHandler.jsonToMap(
+                                SharedPreferencesUtils.getStr(requireContext(), Constants.COLORS_CONFIG)
+                        );
+                        COLORS.remove(category);
+                        SharedPreferencesUtils.putStr(
+                                requireContext(),
+                                Constants.COLORS_CONFIG,
+                                JsonHandler.mapToJson(COLORS)
+                        );
+
+                        removeFilterGroup(category);
+
+                        selectedCategory = ALL_STRING;
                         categoryAdapter.notifyDataSetChanged();
-                        filterData(ALL_STRING); // 重置筛选为 "所有"
+                        filterData(ALL_STRING);
                     } else if (which == 1) {
                         // 编辑标签
                         showColorPickerDialog(requireContext(), category);
@@ -696,6 +716,57 @@ public class SettingsFragment extends Fragment {
         }, getViewLifecycleOwner(), Lifecycle.State.RESUMED);
     }
 
+    private boolean isCategoryReferenced(String category) {
+        for (Map<String, Object> item : dataList) {
+            String itemCategory = (String) item.get("category");
+            if (category.equals(itemCategory)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isBuiltInCategory(String category) {
+        return "Intent".equalsIgnoreCase(category) || "Scheme".equalsIgnoreCase(category);
+    }
+
+    private String normalizeFilterGroup(String category) {
+        if (category == null) {
+            return null;
+        }
+
+        String trimmed = category.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
+        if ("Intent".equalsIgnoreCase(trimmed)) {
+            return "intent";
+        }
+
+        if ("Scheme".equalsIgnoreCase(trimmed)) {
+            return "scheme";
+        }
+
+        return trimmed;
+    }
+
+    private void removeFilterGroup(String category) {
+        String normalized = normalizeFilterGroup(category);
+        if (normalized == null || isBuiltInCategory(normalized)) {
+            return;
+        }
+
+        JsonHandler jsonHandler = new JsonHandler();
+        Map<String, Object> filterJson = jsonHandler.readJsonFromFile(requireContext());
+        if (filterJson == null) {
+            return;
+        }
+
+        if (filterJson.remove(normalized) != null) {
+            jsonHandler.writeJsonToFile(requireContext(), filterJson);
+        }
+    }
 
     @Override
     public void onPause() {

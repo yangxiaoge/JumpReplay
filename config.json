@@ -1,0 +1,20 @@
+[
+  {
+    "name": "打开商品详情",
+    "remark": "适用于 8.x 版本",
+    "packageName": "com.demo.app",
+    "className": "com.demo.router.JumpRouter",
+    "methodName": "open",
+    "category": "Shop",
+    "title": "0",
+    "data": "1"
+  },
+  {
+    "name": "分享面板",
+    "remark": "抓分享入口",
+    "packageName": "ALL",
+    "className": "com.demo.share.ShareManager",
+    "methodName": "dispatch",
+    "category": "Share"
+  }
+]

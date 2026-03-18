@@ -41,7 +41,7 @@ public class SetupFragment extends Fragment {
     private static final int REQUEST_CODE_SHIZUKU_PERMISSION = 1; // 请求权限的 request code
 
     private static final String LANGUAGE_SYSTEM = "system";
-    private static final String[] LANGUAGE_TAGS = {"system", "zh-CN", "en", "jp"};
+    private static final String[] LANGUAGE_TAGS = {"system", "zh-CN", "en", "ja"};
 
     private final Shizuku.OnRequestPermissionResultListener shizukuPermissionListener =
             (requestCode, grantResult) -> {
