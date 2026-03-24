@@ -10,6 +10,7 @@ import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -18,7 +19,9 @@ import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
-import android.widget.LinearLayout;
+import android.content.pm.PackageInfo;
+import android.content.pm.ProviderInfo;
+import android.content.pm.ServiceInfo;
 
 import com.fourtwo.hookintent.base.DataConverter;
 import com.fourtwo.hookintent.base.JsonHandler;
@@ -30,16 +33,9 @@ import com.fourtwo.hookintent.xposed.RecordXposedBridge;
 import com.fourtwo.hookintent.xposed.ui.FloatWindow;
 import com.fourtwo.hookintent.xposed.ui.FloatWindowView;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
@@ -53,6 +49,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -75,7 +73,9 @@ public class IntentCapture implements IXposedHookLoadPackage {
     private FloatWindow floatWindow = null;
     public static final String myAppPackage = "com.fourtwo.hookintent";
     private final String myAppClass = "com.fourtwo.hookintent.IntentIntercept";
-
+    private static final String ANDROID_PACKAGE = "android";
+    private static final String MY_PROVIDER_CLASS = "com.fourtwo.hookintent.service.ConfigProvider";
+    private static final String MY_MESSENGER_SERVICE_CLASS = "com.fourtwo.hookintent.service.MessengerService";
     private final List<Intent> intentList = new ArrayList<>();
 
     private Boolean getIsHook() {
@@ -178,67 +178,367 @@ public class IntentCapture implements IXposedHookLoadPackage {
             return null;
         }
     }
-
-    // 临时
-    // 只追踪 BuyNow 那一条 LiveData 实例
-    private static final java.util.Set<Object> BUY_NOW_LDS =
-            java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
-
-    // 反射取 getter 的小工具
-    private static void tryPutGetter(java.util.Map<String, Object> out, Object obj, String getter) {
+    private void hookAllIfExists(ClassLoader classLoader, String className, String methodName, XC_MethodHook hook) {
         try {
-            java.lang.reflect.Method m = obj.getClass().getMethod(getter);
-            Object v = m.invoke(obj);
-            if (v != null) out.put(getter.substring(3), v);
+            Class<?> clazz = XposedHelpers.findClass(className, classLoader);
+            XposedBridge.hookAllMethods(clazz, methodName, hook);
+            XposedBridge.log("Hooked " + className + "#" + methodName);
         } catch (Throwable ignored) {
         }
     }
 
-    // 提取 BuyNowInfoModel 的关键字段（字段名被混淆也能兜底）
-    private String extractBuyNowFieldsJson(Object value) {
-        if (value == null) return "{}";
-        java.util.LinkedHashMap<String, Object> out = new java.util.LinkedHashMap<>();
-        // 常见字段优先（命名可能不同，留多几手）
-        tryPutGetter(out, value, "getSpuId");
-        tryPutGetter(out, value, "getSkuId");
-        tryPutGetter(out, value, "getPropertyValueId");
-        tryPutGetter(out, value, "getQuantity");
-        tryPutGetter(out, value, "getAddressId");
-        tryPutGetter(out, value, "getCouponId");
-        tryPutGetter(out, value, "getSource");
-        tryPutGetter(out, value, "getBizTraceId");
+    private Intent findIntentArg(Object[] args) {
+        if (args == null) {
+            return null;
+        }
+        for (Object arg : args) {
+            if (arg instanceof Intent) {
+                return (Intent) arg;
+            }
+        }
+        return null;
+    }
 
-        // 如果以上都没拿到，枚举所有 public getter 兜底
-        if (out.isEmpty()) {
-            for (java.lang.reflect.Method m : value.getClass().getMethods()) {
-                if (m.getParameterTypes().length == 0 &&
-                        m.getName().startsWith("get") &&
-                        m.getReturnType() != Void.TYPE) {
-                    try {
-                        Object v = m.invoke(value);
-                        out.put(m.getName().substring(3), v);
-                    } catch (Throwable ignored) {
-                    }
+    @SuppressWarnings("unchecked")
+    private List<ResolveInfo> extractResolveInfoList(Object resultObj) {
+        if (resultObj == null) {
+            return null;
+        }
+
+        if (resultObj instanceof List) {
+            return new ArrayList<>((List<ResolveInfo>) resultObj);
+        }
+
+        try {
+            if ("android.content.pm.ParceledListSlice".equals(resultObj.getClass().getName())) {
+                Method getListMethod = resultObj.getClass().getMethod("getList");
+                Object listObj = getListMethod.invoke(resultObj);
+                if (listObj instanceof List) {
+                    return new ArrayList<>((List<ResolveInfo>) listObj);
+                }
+            }
+        } catch (Throwable t) {
+            XposedBridge.log("extractResolveInfoList failed: " + t);
+        }
+
+        return null;
+    }
+
+    private Object rebuildResolveInfoResult(Object originalResultObj, List<ResolveInfo> newList) {
+        if (originalResultObj == null) {
+            return newList;
+        }
+
+        if (originalResultObj instanceof List) {
+            return newList;
+        }
+
+        try {
+            if ("android.content.pm.ParceledListSlice".equals(originalResultObj.getClass().getName())) {
+                Constructor<?> constructor = originalResultObj.getClass().getDeclaredConstructor(List.class);
+                constructor.setAccessible(true);
+                return constructor.newInstance(newList);
+            }
+        } catch (Throwable t) {
+            XposedBridge.log("rebuildResolveInfoResult failed: " + t);
+        }
+
+        return originalResultObj;
+    }
+
+    private boolean containsMyResolveInfo(List<ResolveInfo> resolveInfos) {
+        if (resolveInfos == null) {
+            return false;
+        }
+
+        for (ResolveInfo resolveInfo : resolveInfos) {
+            if (resolveInfo != null
+                    && resolveInfo.activityInfo != null
+                    && myAppPackage.equals(resolveInfo.activityInfo.packageName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    private boolean isMyComponent(ComponentName componentName, String className) {
+        return componentName != null
+                && myAppPackage.equals(componentName.getPackageName())
+                && className.equals(componentName.getClassName());
+    }
+
+    private boolean isMyProviderRequest(Object[] args) {
+        if (args == null) {
+            return false;
+        }
+
+        for (Object arg : args) {
+            if (arg instanceof String) {
+                String s = (String) arg;
+                if (Constants.AUTHORITY.equals(s) || MY_PROVIDER_CLASS.equals(s)) {
+                    return true;
+                }
+            } else if (arg instanceof Uri) {
+                Uri uri = (Uri) arg;
+                if (Constants.AUTHORITY.equals(uri.getAuthority())) {
+                    return true;
+                }
+            } else if (arg instanceof ProviderInfo) {
+                ProviderInfo pi = (ProviderInfo) arg;
+                if (myAppPackage.equals(pi.packageName) || Constants.AUTHORITY.equals(pi.authority)) {
+                    return true;
                 }
             }
         }
+
+        return false;
+    }
+
+    private boolean isMyServiceRequest(Object[] args) {
+        if (args == null) {
+            return true;
+        }
+
+        for (Object arg : args) {
+            if (arg instanceof ComponentName) {
+                if (isMyComponent((ComponentName) arg, MY_MESSENGER_SERVICE_CLASS)) {
+                    return false;
+                }
+            } else if (arg instanceof Intent) {
+                Intent intent = (Intent) arg;
+
+                if (isMyComponent(intent.getComponent(), MY_MESSENGER_SERVICE_CLASS)) {
+                    return false;
+                }
+
+                Intent selector = intent.getSelector();
+                if (selector != null && isMyComponent(selector.getComponent(), MY_MESSENGER_SERVICE_CLASS)) {
+                    return false;
+                }
+            } else if (arg instanceof String) {
+                String s = (String) arg;
+                if (MY_MESSENGER_SERVICE_CLASS.equals(s)) {
+                    return false;
+                }
+            } else if (arg instanceof ServiceInfo) {
+                ServiceInfo si = (ServiceInfo) arg;
+                if (myAppPackage.equals(si.packageName) || MY_MESSENGER_SERVICE_CLASS.equals(si.name)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+
+    private ProviderInfo findMyProviderInfo(Context context) {
         try {
-            return JsonHandler.toJson((List<Bundle>) out);  // 你已有 JSON 工具
+            PackageInfo packageInfo = context.getPackageManager().getPackageInfo(
+                    myAppPackage,
+                    PackageManager.GET_PROVIDERS | PackageManager.GET_META_DATA
+            );
+
+            if (packageInfo.providers != null) {
+                for (ProviderInfo pi : packageInfo.providers) {
+                    if (MY_PROVIDER_CLASS.equals(pi.name) || Constants.AUTHORITY.equals(pi.authority)) {
+                        return pi;
+                    }
+                }
+            }
         } catch (Throwable t) {
-            return String.valueOf(out);
+            XposedBridge.log("findMyProviderInfo failed: " + t);
+        }
+        return null;
+    }
+
+    private ServiceInfo findMyMessengerServiceInfo(Context context) {
+        try {
+            PackageInfo packageInfo = context.getPackageManager().getPackageInfo(
+                    myAppPackage,
+                    PackageManager.GET_SERVICES | PackageManager.GET_META_DATA
+            );
+
+            if (packageInfo.services != null) {
+                for (ServiceInfo si : packageInfo.services) {
+                    if (MY_MESSENGER_SERVICE_CLASS.equals(si.name)) {
+                        return si;
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            XposedBridge.log("findMyMessengerServiceInfo failed: " + t);
+        }
+        return null;
+    }
+
+    private ResolveInfo buildMyServiceResolveInfo(Context context) {
+        try {
+            ServiceInfo si = findMyMessengerServiceInfo(context);
+            if (si == null) {
+                return null;
+            }
+
+            ResolveInfo ri = new ResolveInfo();
+            ri.serviceInfo = si;
+            ri.resolvePackageName = si.packageName;
+            ri.isDefault = true;
+            ri.match = 0x600000;
+            ri.priority = 1000;
+            ri.preferredOrder = 0;
+            return ri;
+        } catch (Throwable t) {
+            XposedBridge.log("buildMyServiceResolveInfo failed: " + t);
+            return null;
         }
     }
 
-    // 粗判是否是 BuyNowInfoModel（包名可能变，宽松判断）
-    private boolean isBuyNowInfoModel(Object o) {
-        if (o == null) return false;
-        String n = o.getClass().getName();
-        return n.endsWith("BuyNowInfoModel") || n.contains("BuyNowInfo") || n.contains(".buy");
+    private void hookProviderVisibilityBypass(Context context) {
+        ClassLoader classLoader = context.getClassLoader();
+
+        XC_MethodHook providerHook = new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (param.getResult() != null) {
+                    return;
+                }
+
+                if (!isMyProviderRequest(param.args)) {
+                    return;
+                }
+
+                ProviderInfo providerInfo = findMyProviderInfo(context);
+                if (providerInfo != null) {
+                    XposedBridge.log("Bypass resolveContentProvider for " + Constants.AUTHORITY);
+                    param.setResult(providerInfo);
+                }
+            }
+        };
+
+        hookAllIfExists(classLoader, "com.android.server.pm.PackageManagerService", "resolveContentProvider", providerHook);
+        hookAllIfExists(classLoader, "com.android.server.pm.ComputerEngine", "resolveContentProvider", providerHook);
+        hookAllIfExists(classLoader, "com.android.server.pm.ComputerEngine", "resolveContentProviderInternal", providerHook);
     }
-    // 临时
+
+    private void hookServiceVisibilityBypass(Context context) {
+        ClassLoader classLoader = context.getClassLoader();
+
+        XC_MethodHook serviceInfoHook = new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (param.getResult() != null) {
+                    return;
+                }
+
+                if (isMyServiceRequest(param.args)) {
+                    return;
+                }
+
+                ServiceInfo serviceInfo = findMyMessengerServiceInfo(context);
+                if (serviceInfo != null) {
+                    XposedBridge.log("Bypass getServiceInfo for " + MY_MESSENGER_SERVICE_CLASS);
+                    param.setResult(serviceInfo);
+                }
+            }
+        };
+
+        XC_MethodHook resolveServiceHook = new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (param.getResult() != null) {
+                    return;
+                }
+
+                if (isMyServiceRequest(param.args)) {
+                    return;
+                }
+
+                ResolveInfo resolveInfo = buildMyServiceResolveInfo(context);
+                if (resolveInfo != null) {
+                    XposedBridge.log("Bypass resolveService for " + MY_MESSENGER_SERVICE_CLASS);
+                    param.setResult(resolveInfo);
+                }
+            }
+        };
+
+        hookAllIfExists(classLoader, "com.android.server.pm.PackageManagerService", "getServiceInfo", serviceInfoHook);
+        hookAllIfExists(classLoader, "com.android.server.pm.ComputerEngine", "getServiceInfo", serviceInfoHook);
+        hookAllIfExists(classLoader, "com.android.server.pm.ComputerEngine", "getServiceInfoInternal", serviceInfoHook);
+
+        hookAllIfExists(classLoader, "com.android.server.pm.PackageManagerService", "resolveService", resolveServiceHook);
+        hookAllIfExists(classLoader, "com.android.server.pm.ComputerEngine", "resolveService", resolveServiceHook);
+        hookAllIfExists(classLoader, "com.android.server.pm.ComputerEngine", "resolveServiceInternal", resolveServiceHook);
+    }
+
+    private ActivityInfo findMyInterceptActivityInfo(Context context) {
+        try {
+            PackageManager pm = context.getPackageManager();
+            PackageInfo packageInfo = pm.getPackageInfo(
+                    myAppPackage,
+                    PackageManager.GET_ACTIVITIES | PackageManager.GET_META_DATA
+            );
+
+            if (packageInfo.activities != null) {
+                for (ActivityInfo activityInfo : packageInfo.activities) {
+                    if (myAppClass.equals(activityInfo.name)) {
+                        return activityInfo;
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            XposedBridge.log("findMyInterceptActivityInfo failed: " + t);
+        }
+        return null;
+    }
+
+    private ResolveInfo buildMyChooserResolveInfo(Context context, ResolveInfo templateResolveInfo, Intent sourceIntent) {
+        try {
+            ActivityInfo myActivityInfo = findMyInterceptActivityInfo(context);
+            if (myActivityInfo == null) {
+                XposedBridge.log("buildMyChooserResolveInfo: myActivityInfo == null");
+                return null;
+            }
+
+            ResolveInfo myResolveInfo = new ResolveInfo();
+            myResolveInfo.activityInfo = myActivityInfo;
+            myResolveInfo.resolvePackageName = myActivityInfo.packageName;
+
+            if (templateResolveInfo != null) {
+                myResolveInfo.match = templateResolveInfo.match;
+                myResolveInfo.priority = templateResolveInfo.priority;
+                myResolveInfo.preferredOrder = templateResolveInfo.preferredOrder;
+            } else {
+                myResolveInfo.match = 0;
+                myResolveInfo.priority = 0;
+                myResolveInfo.preferredOrder = 0;
+            }
+
+            myResolveInfo.isDefault = true;
+
+            IntentFilter intentFilter = new IntentFilter();
+            intentFilter.addAction(Intent.ACTION_VIEW);
+            intentFilter.addCategory(Intent.CATEGORY_DEFAULT);
+            intentFilter.addCategory(Intent.CATEGORY_BROWSABLE);
+
+            if (sourceIntent.getScheme() != null) {
+                intentFilter.addDataScheme(sourceIntent.getScheme());
+            }
+
+            myResolveInfo.filter = intentFilter;
+            return myResolveInfo;
+        } catch (Throwable t) {
+            XposedBridge.log("buildMyChooserResolveInfo failed: " + t);
+            return null;
+        }
+    }
 
     public void hookSystemMethods(Context applicationContext) {
         ClassLoader classLoader = applicationContext.getClassLoader();
+
+        // 只修复 Android 11+ 上的 Provider / MessengerService 可见性
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            hookProviderVisibilityBypass(applicationContext);
+            hookServiceVisibilityBypass(applicationContext);
+        }
 
         String ClassName = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ? "com.android.server.pm.ComputerEngine" : "com.android.server.pm.PackageManagerService";
         Class<?> hookClass;
@@ -250,7 +550,6 @@ public class IntentCapture implements IXposedHookLoadPackage {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     Intent intent = (Intent) param.args[0];
-
                     // 如果是自己的 Intent，不再处理，直接返回
                     if (myAppPackage.equals(intent.getPackage())) {
                         return;
@@ -286,7 +585,6 @@ public class IntentCapture implements IXposedHookLoadPackage {
                     } finally {
                         Binder.restoreCallingIdentity(token);
                     }
-
 
                     if (disabledScheme != null) {
                         List<Map<String, Object>> disabledSchemeList = JsonHandler.deserializeHookedRecords(disabledScheme);
@@ -330,52 +628,19 @@ public class IntentCapture implements IXposedHookLoadPackage {
                         }
                     }
 
-//                 构造特殊 Intent，用于主动调用
-                    Intent specialIntent = new Intent(Intent.ACTION_VIEW); // 自定义的特殊 Intent
-                    specialIntent.setPackage(myAppPackage); // 只匹配自己 APP 的包名
-                    specialIntent.setComponent(new ComponentName(myAppPackage, myAppClass)); // 设置组件
-                    specialIntent.addCategory(Intent.CATEGORY_DEFAULT); // 添加默认分类
-                    specialIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK); // 设置 Intent 标志
-
-                    // 动态获取参数
-                    Object[] dynamicArgs = param.args.clone(); // 克隆原始参数
-                    dynamicArgs[0] = specialIntent; // 替换 Intent 为特殊 Intent
-                    dynamicArgs[1] = null;                      // 清空 resolvedType
-                    dynamicArgs[2] = PackageManager.MATCH_DEFAULT_ONLY; // 设置 flags，仅匹配默认组件
-
-                    // 调用 queryIntentActivitiesInternal
-                    @SuppressWarnings("unchecked") List<ResolveInfo> myAppResolveInfos = (List<ResolveInfo>) XposedHelpers.callMethod(param.thisObject, // 当前 Hook 的类实例
-                            "queryIntentActivitiesInternal", dynamicArgs // 动态参数数组
+                    // 直接手工构造自己的 ResolveInfo，不再递归 queryIntentActivitiesInternal
+                    ResolveInfo clAppResolveInfo = originalResult.get(0);
+                    ResolveInfo myAppResolveInfo = buildMyChooserResolveInfo(
+                            applicationContext,
+                            clAppResolveInfo,
+                            intent
                     );
 
-                    // 如果成功获取到自己的 ResolveInfo，则合并到原始结果中
-                    if (myAppResolveInfos != null && !myAppResolveInfos.isEmpty()) {
-                        ResolveInfo myAppResolveInfo = myAppResolveInfos.get(0);
-                        ResolveInfo clAppResolveInfo = originalResult.get(0);
-
-                        // 修改 match 值
-                        Field matchField = ResolveInfo.class.getDeclaredField("match");
-                        matchField.setAccessible(true);
-                        matchField.set(myAppResolveInfo, clAppResolveInfo.match); // 与目标应用一致
-
-                        // myAppResolveInfo.activityInfo.exported = true;
-                        // myAppResolveInfo.activityInfo.permission = null;
-                        // myAppResolveInfo.activityInfo.launchMode = ActivityInfo.LAUNCH_SINGLE_TASK;
-                        // myAppResolveInfo.priority = 1000; // 优先级
-                        myAppResolveInfo.isDefault = true; // 标记为默认候选项
-
-                        IntentFilter intentFilter = new IntentFilter();
-                        intentFilter.addAction(Intent.ACTION_VIEW); // 添加 ACTION_VIEW
-                        intentFilter.addCategory(Intent.CATEGORY_DEFAULT); // 添加 CATEGORY_DEFAULT
-                        intentFilter.addCategory(Intent.CATEGORY_BROWSABLE); // 添加 CATEGORY_BROWSABLE
-                        intentFilter.addDataScheme(intent.getScheme()); // 添加 scheme
-
-                        // 设置到 ResolveInfo
-                        myAppResolveInfo.filter = intentFilter;
-
+                    if (myAppResolveInfo != null) {
                         originalResult.add(myAppResolveInfo);
-                        // originalResult.set(0, myAppResolveInfo);
-                        XposedBridge.log("originalResult.addAll: " + originalResult);
+                        XposedBridge.log("originalResult.add: " + originalResult);
+                    } else {
+                        XposedBridge.log("myAppResolveInfo == null, skip inject");
                     }
 
                     // 将修改后的结果设置回返回值
@@ -384,7 +649,6 @@ public class IntentCapture implements IXposedHookLoadPackage {
             });
         } catch (XposedHelpers.ClassNotFoundError ignored) {
         }
-
 
         Class<?> PackageParserClass = XposedHelpers.findClass("android.content.pm.PackageParser", classLoader);
         XposedBridge.hookAllMethods(PackageParserClass, "parseUsesPermission",
@@ -407,7 +671,6 @@ public class IntentCapture implements IXposedHookLoadPackage {
                     }
                 }
         );
-
     }
 
     public void SetFloatWindowUi(Context applicationContext) {
@@ -706,119 +969,61 @@ public class IntentCapture implements IXposedHookLoadPackage {
             }
         }
 
-        try {
-            Class<?> RealCall = Class.forName("okhttp3.RealCall", false, classLoader);
-            XposedHelpers.findAndHookMethod(RealCall, "execute", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    // 在方法调用前的逻辑（如需要可以添加）
-                }
-
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    try {
-                        Object response = param.getResult(); // 获取返回的 Response 对象
-                        Object request = XposedHelpers.callMethod(response, "request"); // 获取 Request 对象
-
-                        // 获取请求方法和 URL
-                        String method = (String) XposedHelpers.callMethod(request, "method");
-                        String url = XposedHelpers.callMethod(request, "url").toString();
-                        XposedBridge.log("[FINAL] [" + method + "] " + url);
-
-                        // 获取请求体
-                        Object body = XposedHelpers.callMethod(request, "body"); // 获取 RequestBody 对象
-                        if (body != null) {
-                            // 创建 Buffer 来读取请求体内容
-                            Class<?> bufferClass = XposedHelpers.findClass("okio.Buffer", classLoader);
-                            Object buffer = XposedHelpers.newInstance(bufferClass);
-
-                            // 调用 RequestBody.writeTo(buffer) 将内容写入 Buffer
-                            XposedHelpers.callMethod(body, "writeTo", buffer);
-
-                            // 获取 Buffer 中的字符串内容
-                            String requestBody = (String) XposedHelpers.callMethod(buffer, "readUtf8");
-                            XposedBridge.log("[REQUEST_BODY] " + requestBody); // 打印请求体日志
-                        }
-                        // 获取响应状态码
-                        int code = (int) XposedHelpers.callMethod(response, "code");
-
-                        // 获取响应体
-                        Object peekBody = XposedHelpers.callMethod(response, "peekBody", 1024 * 1024); // 获取最多 1MB 的数据
-                        String res_body = (String) XposedHelpers.callMethod(peekBody, "string");
-                        // 输出日志
-                        XposedBridge.log("[FINAL_BODY] [" + code + "] " + res_body);
-                    } catch (Exception e) {
-                        XposedBridge.log("[ERROR] " + e);
-                    }
-                }
-            });
-
-        } catch (ClassNotFoundException e) {
-            XposedBridge.log(packageName + ": 未找到okhttp");
-        } catch (Exception e) {
-            XposedBridge.log(packageName + ": Hook OkHttp 发生错误: " + e.getMessage());
-        }
-
-
-        // Hook okhttp3.RealCall.execute
-//            Class<?> RealCall = XposedHelpers.findClass("okhttp3.RealCall", classLoader);
-        //            Class<?> okhttpClass = Class.forName("okhttp3.OkHttpClient", false, classLoader);
-//            XposedBridge.hookAllMethods(okhttpClass, "newCall", new XC_MethodHook() {
+//        try {
+//            Class<?> RealCall = Class.forName("okhttp3.RealCall", false, classLoader);
+//            XposedHelpers.findAndHookMethod(RealCall, "execute", new XC_MethodHook() {
 //                @Override
-//                protected void beforeHookedMethod(MethodHookParam methodHookParam) throws Throwable {
-//                    super.beforeHookedMethod(methodHookParam);
+//                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+//                    // 在方法调用前的逻辑（如需要可以添加）
+//                }
 //
-//                    // 获取 Request 对象
-//                    Object request = methodHookParam.args[0];
-//                    if (request != null) {
-//                        StringBuilder logBuilder = new StringBuilder();
-//                        logBuilder.append("OkHttp Request intercepted:\n");
+//                @Override
+//                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+//                    try {
+//                        Object response = param.getResult(); // 获取返回的 Response 对象
+//                        Object request = XposedHelpers.callMethod(response, "request"); // 获取 Request 对象
 //
-//                        // 获取请求 URL
-//                        Method urlMethod = request.getClass().getDeclaredMethod("url");
-//                        Object url = urlMethod.invoke(request);
-//                        logBuilder.append("URL: ").append(url).append("\n");
-//
-//                        // 获取请求方法 (GET/POST 等)
-//                        Method methodMethod = request.getClass().getDeclaredMethod("method");
-//                        Object method = methodMethod.invoke(request);
-//                        logBuilder.append("Method: ").append(method).append("\n");
-//
-//                        // 获取请求头
-//                        Method headersMethod = request.getClass().getDeclaredMethod("headers");
-//                        Object headers = headersMethod.invoke(request);
-//                        logBuilder.append("Headers: ").append(headers).append("\n");
+//                        // 获取请求方法和 URL
+//                        String method = (String) XposedHelpers.callMethod(request, "method");
+//                        String url = XposedHelpers.callMethod(request, "url").toString();
+//                        XposedBridge.log("[FINAL] [" + method + "] " + url);
 //
 //                        // 获取请求体
-//                        Method bodyMethod = request.getClass().getDeclaredMethod("body");
-//                        Object body = bodyMethod.invoke(request);
+//                        Object body = XposedHelpers.callMethod(request, "body"); // 获取 RequestBody 对象
 //                        if (body != null) {
-//                            logBuilder.append("Body Class: ").append(body.getClass().getName()).append("\n");
+//                            // 创建 Buffer 来读取请求体内容
+//                            Class<?> bufferClass = XposedHelpers.findClass("okio.Buffer", classLoader);
+//                            Object buffer = XposedHelpers.newInstance(bufferClass);
 //
-//                            try {
-//                                // 通过 writeTo 方法解析请求体内容
-//                                Method writeToMethod = body.getClass().getDeclaredMethod("writeTo", OutputStream.class);
-//                                XposedBridge.log("writeToMethod: " + writeToMethod);
-//                                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-//                                writeToMethod.invoke(body, outputStream); // 将请求体写入内存流
-//                                String bodyContent = outputStream.toString("UTF-8"); // 读取流内容为字符串
-//                                logBuilder.append("Body Content: ").append(bodyContent).append("\n");
-//                            } catch (NoSuchMethodException e) {
-//                                logBuilder.append("Body does not have writeTo method\n");
-//                            } catch (Exception e) {
-//                                logBuilder.append("Failed to parse body content: ").append(e.getMessage()).append("\n");
-//                            }
-//                        } else {
-//                            logBuilder.append("Body: null\n");
+//                            // 调用 RequestBody.writeTo(buffer) 将内容写入 Buffer
+//                            XposedHelpers.callMethod(body, "writeTo", buffer);
+//
+//                            // 获取 Buffer 中的字符串内容
+//                            String requestBody = (String) XposedHelpers.callMethod(buffer, "readUtf8");
+//                            XposedBridge.log("[REQUEST_BODY] " + requestBody); // 打印请求体日志
 //                        }
+//                        // 获取响应状态码
+//                        int code = (int) XposedHelpers.callMethod(response, "code");
 //
+//                        // 获取响应体
+//                        Object peekBody = XposedHelpers.callMethod(response, "peekBody", 1024 * 1024); // 获取最多 1MB 的数据
+//                        String res_body = (String) XposedHelpers.callMethod(peekBody, "string");
 //                        // 输出日志
-//                        XposedBridge.log(logBuilder.toString());
+//                        XposedBridge.log("[FINAL_BODY] [" + code + "] " + res_body);
+//                    } catch (Exception e) {
+//                        XposedBridge.log("[ERROR] " + e);
 //                    }
 //                }
 //            });
-    }
+//
+//        } catch (ClassNotFoundException e) {
+//            XposedBridge.log(packageName + ": 未找到okhttp");
+//        } catch (Exception e) {
+//            XposedBridge.log(packageName + ": Hook OkHttp 发生错误: " + e.getMessage());
+//        }
 
+
+    }
     /**
      * 调试测试代码
      */

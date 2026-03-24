@@ -97,4 +97,39 @@
     <string name="open_window_main_switch">Open floating window (restart process to take effect)</string>
     <string name="window_sub_switch">Module floating window switch</string>
     <string name="pick_color">选择颜色</string>
+    <string name="cloud_empty_view">请输入接口地址并点击请求</string>
+    <string name="button_restore_default_url">恢复默认</string>
+    <string name="button_request_cloud">请求</string>
+    <string name="input_cloud_url">云配置接口地址</string>
+    <string name="cloud_summary">摘要</string>
+    <string name="cloud_remark">备注</string>
+    <string name="cloud_name">配置名称</string>
+
+    <string name="menu_blocker">拦截</string>
+    <string name="blocker_custom_group">自定义 Scheme</string>
+    <string name="blocker_add_scheme">添加 Scheme</string>
+    <string name="blocker_settings">设置</string>
+    <string name="blocker_generate">生成配置</string>
+    <string name="blocker_loading">正在扫描应用规则...</string>
+    <string name="blocker_empty">未找到可用规则</string>
+    <string name="blocker_input_scheme">输入自定义 scheme</string>
+    <string name="blocker_scheme_invalid">scheme 不能为空</string>
+    <string name="blocker_scheme_duplicate">该 scheme 已存在</string>
+    <string name="blocker_package_hint">Blocker 包名</string>
+    <string name="blocker_label_hint">Blocker 名称</string>
+    <string name="blocker_saved">已保存</string>
+    <string name="blocker_generate_no_rule">请先勾选至少一条规则</string>
+    <string name="blocker_generate_success">配置已生成</string>
+    <string name="blocker_config_title">拦截配置</string>
+    <string name="blocker_group_subtitle">%1$d/%2$d 已选</string>
+    <string name="blocker_group_subtitle_with_pkg">%1$s · %2$d/%3$d 已选</string>
+    <string name="blocker_rule_activity">Activity: %1$s</string>
+    <string name="blocker_rule_match">scheme=%1$s host=%2$s path=%3$s</string>
+    <string name="blocker_template_missing">未找到模板 APK，请确认 assets/blocker/blocker_template.apk 已存在</string>
+    <string name="blocker_build">生成拦截器</string>
+    <string name="blocker_build_prepared">已准备打包数据</string>
+    <string name="blocker_building">正在生成拦截器...</string>
+    <string name="blocker_build_done">拦截器已生成，准备安装</string>
+    <string name="blocker_install_permission_required">请先允许本应用安装未知应用</string>
+
 </resources>

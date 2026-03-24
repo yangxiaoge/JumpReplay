@@ -32,19 +32,22 @@ import java.util.Map;
 public class SettingsAdapter extends RecyclerView.Adapter<SettingsAdapter.SettingsViewHolder> {
 
     private final List<Map<String, Object>> dataList;
+    private final EditCallback editCallback;
+    private final DeleteCallback deleteCallback;
 
     public interface DeleteCallback {
         void onDeleteItem(int position);
     }
 
-    private DeleteCallback deleteCallback;
+    public interface EditCallback {
+        void onEditItem(Map<String, Object> currentItem, int position);
+    }
 
     public SettingsAdapter(List<Map<String, Object>> dataList, EditCallback editCallback, DeleteCallback deleteCallback) {
         this.dataList = dataList;
         this.editCallback = editCallback;
         this.deleteCallback = deleteCallback;
     }
-
 
     @NonNull
     @Override
@@ -53,75 +56,82 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingsAdapter.Settin
         return new SettingsViewHolder(view);
     }
 
-    public interface EditCallback {
-        void onEditItem(Map<String, Object> currentItem, int position);
-    }
-
-
-    private EditCallback editCallback;
-
     @Override
     public void onBindViewHolder(@NonNull SettingsViewHolder holder, int position) {
         Map<String, Object> item = dataList.get(position);
-
         Context context = holder.itemView.getContext();
 
-        // 设置显示内容
-        holder.packageName.setText((String) item.get("packageName"));
-        holder.methodName.setText((String) item.get("methodName"));
-        holder.className.setText((String) item.get("className"));
-        holder.category.setText((String) item.get("category"));
+        String packageName = valueOf(item.get("packageName"));
+        String methodName = valueOf(item.get("methodName"));
+        String className = valueOf(item.get("className"));
+        String category = valueOf(item.get("category"));
 
-        holder.icon.setImageDrawable(AppInfoHelper.getAppInfo(context, (String) item.get("packageName")).getAppIcon());
+        holder.category.setText(category);
+        holder.icon.setImageDrawable(AppInfoHelper.getAppInfo(context, packageName).getAppIcon());
 
-        // 设置分类的颜色背景
-        String category = (String) item.get("category");
+        if (!methodName.isEmpty()) {
+            holder.methodName.setVisibility(View.VISIBLE);
+            holder.methodName.setText(methodName);
+        } else {
+            holder.methodName.setVisibility(View.GONE);
+            holder.methodName.setText("");
+        }
+
+        if (!className.isEmpty()) {
+            holder.className.setVisibility(View.VISIBLE);
+            holder.className.setText(className);
+        } else {
+            holder.className.setVisibility(View.GONE);
+            holder.className.setText("");
+        }
+
+        if (!packageName.isEmpty()) {
+            holder.packageName.setVisibility(View.VISIBLE);
+            holder.packageName.setText(packageName);
+        } else {
+            holder.packageName.setVisibility(View.GONE);
+            holder.packageName.setText("");
+        }
+
         Drawable drawable = ContextCompat.getDrawable(context, R.drawable.badge_background);
         if (drawable instanceof GradientDrawable) {
-            GradientDrawable background = (GradientDrawable) drawable;
+            GradientDrawable background = (GradientDrawable) drawable.mutate();
             String COLORS_CONFIG = SharedPreferencesUtils.getStr(context, Constants.COLORS_CONFIG);
             Map<String, String> COLORS = JsonHandler.jsonToMap(COLORS_CONFIG);
 
             if (COLORS.containsKey(category)) {
                 background.setColor(Color.parseColor(COLORS.get(category)));
             } else {
-                background.setColor(Color.GRAY); // 默认灰色
+                background.setColor(Color.GRAY);
             }
             holder.category.setBackground(background);
         }
 
-        // 设置开关状态
         Boolean isOpen = (Boolean) item.get("open");
-//        Log.d("SettingsAdapter", "Binding position: " + position + "," + item.get("_uuid") + " isOpen: " + isOpen);
-
-        // 移除之前的监听器
         holder.switchToggle.setOnCheckedChangeListener(null);
-
         holder.switchToggle.setChecked(isOpen != null && isOpen);
+        holder.switchToggle.setOnCheckedChangeListener((buttonView, isChecked) -> item.put("open", isChecked));
 
-        holder.switchToggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            Log.d("SettingsAdapter", "Switch toggled at position: " + position + "," + item.get("_uuid") + ", isChecked: " + isChecked);
-            // 更新数据模型中的状态
-            item.put("open", isChecked);
-        });
-
-
-        // 操作按钮逻辑
         holder.operate.setOnClickListener(v -> {
+            int adapterPosition = holder.getBindingAdapterPosition();
+            if (adapterPosition == RecyclerView.NO_POSITION) {
+                return;
+            }
+
             List<String> options = new ArrayList<>();
             List<Runnable> actions = new ArrayList<>();
 
             options.add("删除");
             actions.add(() -> {
                 if (deleteCallback != null) {
-                    deleteCallback.onDeleteItem(position);
+                    deleteCallback.onDeleteItem(adapterPosition);
                 }
             });
 
             options.add("编辑");
             actions.add(() -> {
                 if (editCallback != null) {
-                    editCallback.onEditItem(dataList.get(position), position);
+                    editCallback.onEditItem(dataList.get(adapterPosition), adapterPosition);
                 }
             });
 
@@ -139,16 +149,18 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingsAdapter.Settin
             popupMenu.show();
         });
 
-        // 内置过滤的逻辑
         Boolean isInternal = (Boolean) item.get("internal");
         if (isInternal != null && isInternal) {
-            holder.operate.setVisibility(View.GONE); // 隐藏操作按钮
-            holder.operate.setOnClickListener(null); // 移除点击事件
+            holder.operate.setVisibility(View.GONE);
+            holder.operate.setOnClickListener(null);
         } else {
-            holder.operate.setVisibility(View.VISIBLE); // 显示操作按钮
+            holder.operate.setVisibility(View.VISIBLE);
         }
     }
 
+    private String valueOf(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
 
     @Override
     public int getItemCount() {
@@ -164,7 +176,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingsAdapter.Settin
         public SettingsViewHolder(@NonNull View itemView) {
             super(itemView);
             icon = itemView.findViewById(R.id.icon);
-            operate = itemView.findViewById(R.id.operate); // Add operate here
+            operate = itemView.findViewById(R.id.operate);
             category = itemView.findViewById(R.id.category);
             packageName = itemView.findViewById(R.id.package_name);
             methodName = itemView.findViewById(R.id.method_name);
@@ -172,4 +184,5 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingsAdapter.Settin
             switchToggle = itemView.findViewById(R.id.switch_toggle);
         }
     }
+
 }

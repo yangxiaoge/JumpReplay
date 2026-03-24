@@ -9,6 +9,15 @@ public final class Constants {
         throw new UnsupportedOperationException("Cannot instantiate utility class.");
     }
 
+    public static final String BLOCKER_OUTPUT_PACKAGE = "blockerOutputPackage";
+    public static final String BLOCKER_OUTPUT_LABEL = "blockerOutputLabel";
+    public static final String BLOCKER_CUSTOM_RULES = "blockerCustomRules";
+    public static final String BLOCKER_TEMPLATE_ASSET = "blocker/blocker_template.apk";
+    public static final String BLOCKER_SPEC_FILE_NAME = "blocker_spec.json";
+
+    public static final String CLOUD_CONFIG_URL = "cloudConfigUrl";
+    public static final String CLOUD_CONFIG_URL_HISTORY = "cloudConfigUrlHistory";
+    public static final String DEFAULT_CLOUD_CONFIG_URL = "https://raw.githubusercontent.com/FourTwooo/JumpReplay/refs/heads/master/config.json";
     // Provider Config
     public static final String AUTHORITY = "com.fourtwo.hookintent.configprovider";
 

@@ -35,6 +35,11 @@
             android:icon="@drawable/disabled"
             android:title="@string/disabled" />
 
+        <item
+            android:id="@+id/nav_blocker"
+            android:icon="@drawable/filter_list_off"
+            android:title="@string/menu_blocker" />
+
     </group>
 
     <group
@@ -49,4 +54,5 @@
             android:icon="@drawable/slideshow"
             android:title="@string/menu_me" />
     </group>
+
 </menu>

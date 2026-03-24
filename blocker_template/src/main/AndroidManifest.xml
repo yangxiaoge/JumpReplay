@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.fourtwo.blockertemplate">
+
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="意图拦截器"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true">
+
+        <!-- 拦截入口：透明、无感、不进最近任务 -->
+        <activity
+            android:name="com.fourtwo.blockertemplate.BlockerEntryActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:finishOnTaskLaunch="true"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="blockslot00" />
+                <data android:scheme="blockslot01" />
+                <data android:scheme="blockslot02" />
+                <data android:scheme="blockslot03" />
+                <data android:scheme="blockslot04" />
+                <data android:scheme="blockslot05" />
+                <data android:scheme="blockslot06" />
+                <data android:scheme="blockslot07" />
+                <data android:scheme="blockslot08" />
+                <data android:scheme="blockslot09" />
+                <data android:scheme="blockslot10" />
+                <data android:scheme="blockslot11" />
+                <data android:scheme="blockslot12" />
+                <data android:scheme="blockslot13" />
+                <data android:scheme="blockslot14" />
+                <data android:scheme="blockslot15" />
+                <data android:scheme="blockslot16" />
+                <data android:scheme="blockslot17" />
+                <data android:scheme="blockslot18" />
+                <data android:scheme="blockslot19" />
+                <data android:scheme="blockslot20" />
+                <data android:scheme="blockslot21" />
+                <data android:scheme="blockslot22" />
+                <data android:scheme="blockslot23" />
+                <data android:scheme="blockslot24" />
+                <data android:scheme="blockslot25" />
+                <data android:scheme="blockslot26" />
+                <data android:scheme="blockslot27" />
+                <data android:scheme="blockslot28" />
+                <data android:scheme="blockslot29" />
+                <data android:scheme="blockslot30" />
+                <data android:scheme="blockslot31" />
+                <data android:scheme="blockslot32" />
+                <data android:scheme="blockslot33" />
+                <data android:scheme="blockslot34" />
+                <data android:scheme="blockslot35" />
+                <data android:scheme="blockslot36" />
+                <data android:scheme="blockslot37" />
+                <data android:scheme="blockslot38" />
+                <data android:scheme="blockslot39" />
+                <data android:scheme="blockslot40" />
+                <data android:scheme="blockslot41" />
+                <data android:scheme="blockslot42" />
+                <data android:scheme="blockslot43" />
+                <data android:scheme="blockslot44" />
+                <data android:scheme="blockslot45" />
+                <data android:scheme="blockslot46" />
+                <data android:scheme="blockslot47" />
+                <data android:scheme="blockslot48" />
+                <data android:scheme="blockslot49" />
+                <data android:scheme="blockslot50" />
+                <data android:scheme="blockslot51" />
+                <data android:scheme="blockslot52" />
+                <data android:scheme="blockslot53" />
+                <data android:scheme="blockslot54" />
+                <data android:scheme="blockslot55" />
+                <data android:scheme="blockslot56" />
+                <data android:scheme="blockslot57" />
+                <data android:scheme="blockslot58" />
+                <data android:scheme="blockslot59" />
+                <data android:scheme="blockslot60" />
+                <data android:scheme="blockslot61" />
+                <data android:scheme="blockslot62" />
+                <data android:scheme="dewulink" />
+            </intent-filter>
+        </activity>
+
+        <!-- 未命中规则时的决策弹窗 -->
+        <activity
+            android:name="com.fourtwo.blockertemplate.DecisionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:finishOnTaskLaunch="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- 管理页：桌面可见 -->
+        <activity
+            android:name="com.fourtwo.blockertemplate.ManageActivity"
+            android:exported="true"
+            android:label="意图拦截器">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+</manifest>

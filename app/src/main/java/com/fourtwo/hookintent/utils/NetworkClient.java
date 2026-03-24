@@ -37,6 +37,11 @@ public class NetworkClient {
         void onFailure(String errorMessage);
     }
 
+    public interface JsonArrayCallback {
+        void onSuccess(JSONArray data);
+        void onFailure(String errorMessage);
+    }
+
     public void getReadMe(String url, ReadMeCallback callback) {
         Request request = new Request.Builder()
                 .url(url)
@@ -95,8 +100,56 @@ public class NetworkClient {
         });
     }
 
+    public void getJsonArray(String url, JsonArrayCallback callback) {
+        Request request = new Request.Builder()
+                .url(url)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                mainHandler.post(() -> callback.onFailure("请求失败：" + e.getMessage()));
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (!response.isSuccessful() || response.body() == null) {
+                    mainHandler.post(() -> callback.onFailure("请求失败，响应不成功"));
+                    return;
+                }
+
+                String responseData = response.body().string().trim();
+
+                try {
+                    JSONArray result;
+
+                    if (responseData.startsWith("[")) {
+                        result = new JSONArray(responseData);
+                    } else {
+                        JSONObject obj = new JSONObject(responseData);
+                        JSONArray data = obj.optJSONArray("data");
+                        if (data != null) {
+                            result = data;
+                        } else {
+                            JSONArray list = obj.optJSONArray("list");
+                            if (list != null) {
+                                result = list;
+                            } else {
+                                throw new JSONException("响应不是 JSONArray，且未找到 data/list 数组字段");
+                            }
+                        }
+                    }
+
+                    JSONArray finalResult = result;
+                    mainHandler.post(() -> callback.onSuccess(finalResult));
+                } catch (JSONException e) {
+                    mainHandler.post(() -> callback.onFailure("解析JSON失败：" + e.getMessage()));
+                }
+            }
+        });
+    }
+
     private String processVersion(String version) {
-        // 去掉前面的 "v" 和后面的 "-beta" 或其他后缀
         if (version.startsWith("v")) {
             version = version.substring(1);
         }

@@ -18,6 +18,8 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -39,9 +41,14 @@ import com.fourtwo.hookintent.R;
 import com.fourtwo.hookintent.base.JsonHandler;
 import com.fourtwo.hookintent.data.Constants;
 import com.fourtwo.hookintent.utils.LoadingOverlay;
+import com.fourtwo.hookintent.utils.NetworkClient;
 import com.fourtwo.hookintent.utils.SharedPreferencesUtils;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,6 +64,7 @@ import yuku.ambilwarna.AmbilWarnaDialog;
 public class SettingsFragment extends Fragment {
 
     private static final String TAG = "SettingsFragment";
+    private static final int MAX_CLOUD_URL_HISTORY = 20;
 
     private RecyclerView recyclerView;
     private List<Map<String, Object>> dataList;
@@ -65,13 +73,14 @@ public class SettingsFragment extends Fragment {
 
     private RecyclerView category_list;
     private List<Pair<String, String>> categoryData = new ArrayList<>();
-    private CategoryAdapter categoryAdapter; // 横向列表的适配器
+    private CategoryAdapter categoryAdapter;
 
     private List<Map<String, Object>> filteredData;
 
     private String selectedCategory;
-
     private String ALL_STRING;
+
+    private final NetworkClient networkClient = new NetworkClient();
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -79,10 +88,8 @@ public class SettingsFragment extends Fragment {
         ALL_STRING = getString(R.string.all);
     }
 
-    private void onEdit(Map<String, Object> _currentItem, int _position) {
-        showEditDialog(_currentItem, requireContext(), () -> {
-            adapter.notifyItemChanged(_position);
-        });
+    private void onEdit(Map<String, Object> currentItem, int position) {
+        showEditDialog(currentItem, null, requireContext(), () -> adapter.notifyItemChanged(position));
     }
 
     @Override
@@ -93,9 +100,9 @@ public class SettingsFragment extends Fragment {
         recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
 
         dataList = prepareData();
-        filteredData = new ArrayList<>(dataList); // 初始显示全部数据
+        filteredData = new ArrayList<>(dataList);
 
-        adapter = new SettingsAdapter(filteredData, this::onEdit, this::onDeleteItem); // 传递删除逻辑
+        adapter = new SettingsAdapter(filteredData, this::onEdit, this::onDeleteItem);
         recyclerView.setAdapter(adapter);
 
         category_list = view.findViewById(R.id.category_list);
@@ -110,27 +117,17 @@ public class SettingsFragment extends Fragment {
         categoryAdapter = new CategoryAdapter(categoryData, this::onCategorySelected, this::onCategoryLongPressed);
         category_list.setAdapter(categoryAdapter);
 
-        // 默认选择 "所有" 标签
         selectedCategory = ALL_STRING;
         filterData(selectedCategory);
-
 
         return view;
     }
 
     private void onDeleteItem(int position) {
-        // 获取要删除的项
         Map<String, Object> toDelete = filteredData.get(position);
-
-        // 从 dataList 中移除
         dataList.remove(toDelete);
-
-        // 调用 saveData 更新 SharedPreferences
         saveData();
-
-        // 重新筛选数据以刷新 UI
         filterData(selectedCategory);
-
         Toast.makeText(requireContext(), "记录已删除", Toast.LENGTH_SHORT).show();
     }
 
@@ -168,552 +165,10 @@ public class SettingsFragment extends Fragment {
                         categoryAdapter.notifyDataSetChanged();
                         filterData(ALL_STRING);
                     } else if (which == 1) {
-                        // 编辑标签
                         showColorPickerDialog(requireContext(), category);
                     }
                 })
                 .show();
-    }
-
-    private void showColorPickerDialog(Context context, String category) {
-        Map<String, String> COLORS = JsonHandler.jsonToMap(SharedPreferencesUtils.getStr(context, Constants.COLORS_CONFIG));
-        int color = COLORS.containsKey(category) ? Color.parseColor(COLORS.get(category)) : Color.GRAY;
-        AmbilWarnaDialog dialog = new AmbilWarnaDialog(context, color, new AmbilWarnaDialog.OnAmbilWarnaListener() {
-            @Override
-            public void onOk(AmbilWarnaDialog dialog, int color) {
-                String colorHex = String.format("#%06X", (0xFFFFFF & color));
-                COLORS.put(category, colorHex);
-                SharedPreferencesUtils.putStr(context, Constants.COLORS_CONFIG, JsonHandler.mapToJson(COLORS));
-                for (int i = 0; i < categoryData.size(); i++) {
-                    if (categoryData.get(i).first.equals(category)) {
-                        categoryData.set(i, new Pair<>(category, colorHex));
-                        categoryAdapter.notifyItemChanged(i);
-                        break;
-                    }
-                }
-            }
-
-            @Override
-            public void onCancel(AmbilWarnaDialog dialog) {
-            }
-        });
-        dialog.show();
-    }
-
-    private void prepareCategoryData() {
-        categoryData.add(new Pair<>(ALL_STRING, "#808080")); // 默认添加 "所有" 标签
-
-        String colorsJson = SharedPreferencesUtils.getStr(requireContext(), Constants.COLORS_CONFIG);
-
-        try {
-            Map<String, String> colorMap = JsonHandler.jsonToMap(colorsJson);
-            for (Map.Entry<String, String> entry : colorMap.entrySet()) {
-                String key = entry.getKey();
-                String value = entry.getValue();
-                categoryData.add(new Pair<>(key, value));
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "解析颜色配置失败: " + e.getMessage());
-            categoryData.add(new Pair<>("默认标签", "#808080"));
-        }
-    }
-
-    private void onCategorySelected(String category) {
-        selectedCategory = category;
-        filterData(category);
-    }
-
-    @SuppressLint("NotifyDataSetChanged")
-    private void filterData(String category) {
-        filteredData.clear();
-        if (ALL_STRING.equals(category)) {
-            filteredData.addAll(dataList); // 引用 dataList 的原始数据
-        } else {
-            for (Map<String, Object> item : dataList) {
-                String itemCategory = (String) item.get("category");
-                if (category.equals(itemCategory)) {
-                    filteredData.add(item); // 引用原始数据
-                }
-            }
-        }
-        Log.d("SettingsFragment", "Filter applied. Category: " + category + ", filteredData size: " + filteredData.size());
-        adapter.notifyDataSetChanged();
-    }
-
-
-    private void saveData() {
-        List<Map<String, Object>> internalList = new ArrayList<>();
-        List<Map<String, Object>> externalList = new ArrayList<>();
-
-        // 根据 internal 属性分类数据
-        classifyData(dataList, internalList, externalList);
-
-        // 保存 internal 数据
-        saveToPreferences(Constants.INTERNAL_HOOKS_CONFIG, internalList);
-
-        // 保存 external 数据
-        saveToPreferences(Constants.EXTERNAL_HOOKS_CONFIG, externalList);
-
-        Log.d(TAG, "数据已保存到 SharedPreferences");
-    }
-
-
-    /**
-     * 根据 internal 属性分类数据。
-     *
-     * @param sourceList   原始数据列表。
-     * @param internalList 内部数据列表。
-     * @param externalList 外部数据列表。
-     */
-    private void classifyData(List<Map<String, Object>> sourceList, List<Map<String, Object>> internalList, List<Map<String, Object>> externalList) {
-        for (Map<String, Object> item : sourceList) {
-            Boolean isInternal = (Boolean) item.get("internal");
-            if (isInternal != null && isInternal) {
-                internalList.add(item);
-            } else {
-                externalList.add(item);
-            }
-        }
-    }
-
-    /**
-     * 保存数据到 SharedPreferences。
-     *
-     * @param key      SharedPreferences 的键。
-     * @param dataList 要保存的数据列表。
-     */
-    private void saveToPreferences(String key, List<Map<String, Object>> dataList) {
-        String jsonData = dataList.isEmpty() ? null : JsonHandler.serializeHookedRecords(dataList);
-        SharedPreferencesUtils.putStr(requireContext(), key, jsonData);
-        Log.d(TAG, key + " saved: " + jsonData);
-    }
-
-    public int findIndexByUuid(List<Map<String, Object>> dataList, String targetUuid) {
-        for (int i = 0; i < dataList.size(); i++) {
-            Map<String, Object> item = dataList.get(i);
-            if (item.containsKey("_uuid") && targetUuid.equals(item.get("_uuid"))) {
-                return i; // 找到时返回索引
-            }
-        }
-        return -1; // 未找到时返回 -1
-    }
-
-
-    /**
-     * 向 dataList 中添加或更新一条记录。
-     *
-     * @param newItem 包含新增或更新的数据项。
-     */
-    @SuppressLint("NotifyDataSetChanged")
-    private void addOrUpdateItem(Map<String, Object> newItem) {
-        // 获取新项的关键字段
-
-        String newPackageName = (String) newItem.get("packageName");
-        String newClassName = (String) newItem.get("className");
-        String newMethodName = (String) newItem.get("methodName");
-        String newCategory = (String) newItem.get("category");
-
-        if (newClassName == null || newMethodName == null || newCategory == null || newPackageName == null ||
-                newClassName.isEmpty() || newMethodName.isEmpty() || newCategory.isEmpty() || newPackageName.isEmpty()) {
-            Toast.makeText(requireContext(), "className、methodName、packageName、category 不能为空", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        int index = findIndexByUuid(dataList, (String) newItem.get("_uuid"));
-
-        if (index != -1) {
-            // 更新现有记录
-            dataList.set(index, newItem);
-            Log.d("SettingsFragment", "Item updated at index: " + index + ", new state: " + newItem);
-            Toast.makeText(requireContext(), "记录已更新", Toast.LENGTH_SHORT).show();
-        } else {
-            // 添加新记录
-            dataList.add(newItem);
-            Log.d("SettingsFragment", "Item added: " + newItem);
-            Toast.makeText(requireContext(), "新记录已添加", Toast.LENGTH_SHORT).show();
-        }
-
-        // 保存数据到 SharedPreferences
-        saveData();
-
-        // 重新筛选并通知适配器
-        filterData(selectedCategory);
-    }
-
-    private List<Map<String, Object>> prepareData() {
-        List<Map<String, Object>> list = new ArrayList<>();
-
-        // 加载内部数据
-        loadFromPreferences(Constants.INTERNAL_HOOKS_CONFIG, true, list);
-
-        // 加载外部数据
-        loadFromPreferences(Constants.EXTERNAL_HOOKS_CONFIG, false, list);
-
-        return list;
-    }
-
-    /**
-     * 从 SharedPreferences 加载数据。
-     *
-     * @param key        SharedPreferences 的键。
-     * @param isInternal 是否为内部数据。
-     * @param targetList 要添加到的数据列表。
-     */
-    private void loadFromPreferences(String key, boolean isInternal, List<Map<String, Object>> targetList) {
-        String config = SharedPreferencesUtils.getStr(requireContext(), key);
-        if (config != null) {
-            List<Map<String, Object>> records = JsonHandler.deserializeHookedRecords(config);
-            for (Map<String, Object> item : records) {
-                if (!item.containsKey("_uuid")) {
-                    item.put("_uuid", UUID.randomUUID().toString());
-                }
-                item.put("internal", isInternal);
-                targetList.add(item);
-            }
-        }
-    }
-
-    @SuppressLint({"ClickableViewAccessibility", "DefaultLocale"})
-    private void showEditDialog(@Nullable Map<String, Object> existingData, @NonNull Context context, @NonNull Runnable onSaveCallback) {
-        // 创建弹窗并设置布局
-        View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_custom_hook, null);
-        AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        builder.setView(dialogView);
-
-        // 初始化弹窗内的控件
-        TextInputEditText inputPackageName = dialogView.findViewById(R.id.input_package_name);
-        TextInputEditText inputMethodName = dialogView.findViewById(R.id.input_method_name);
-        TextInputEditText inputClassName = dialogView.findViewById(R.id.input_class_name);
-        TextInputEditText inputCategory = dialogView.findViewById(R.id.input_category);
-        EditText inputTitleArgsIndex = dialogView.findViewById(R.id.input_title_args_index);
-        EditText inputDataArgsIndex = dialogView.findViewById(R.id.input_data_args_index);
-        CheckBox checkboxTitleArgs = dialogView.findViewById(R.id.checkbox_title_args);
-        CheckBox checkboxDataArgs = dialogView.findViewById(R.id.checkbox_data_args);
-        Button buttonConfirm = dialogView.findViewById(R.id.button_confirm);
-        Button buttonPickColor = dialogView.findViewById(R.id.button_pick_color);
-
-        @SuppressLint({"MissingInflatedId", "LocalSuppress"}) TextInputLayout idTILQuery = dialogView.findViewById(R.id.idTILQuery);
-        idTILQuery.setEndIconOnClickListener(view -> {
-            Log.d(TAG, "showEditDialog: 图标被点击");
-
-            // 创建加载进度
-            LoadingOverlay loadingOverlay = new LoadingOverlay(requireContext());
-            loadingOverlay.setLoadingText("正在加载应用列表...");
-            loadingOverlay.show();
-
-            // 使用 Executor 执行耗时任务
-            Executor executor = Executors.newSingleThreadExecutor();
-            executor.execute(() -> {
-                // 获取包管理器
-                PackageManager packageManager = requireContext().getPackageManager();
-
-                // 获取所有已安装的应用程序
-                List<ApplicationInfo> installedApplications = packageManager.getInstalledApplications(PackageManager.GET_META_DATA);
-
-                List<Map<String, Object>> appInfoHash = new ArrayList<>();
-
-                for (ApplicationInfo app : installedApplications) {
-                    Map<String, Object> appInfo = new HashMap<>();
-                    try {
-                        appInfo.put("isSystem", (app.flags & ApplicationInfo.FLAG_SYSTEM) != 0);
-                        appInfo.put("appName", packageManager.getApplicationLabel(app));
-                        appInfo.put("packageName", app.packageName);
-
-                        PackageInfo packageInfo = packageManager.getPackageInfo(app.packageName, 0);
-                        appInfo.put("version", String.format("%s(%s)", packageInfo.versionName, packageInfo.versionCode));
-
-                        appInfoHash.add(appInfo);
-                        Log.d(TAG, appInfo.toString());
-                    } catch (PackageManager.NameNotFoundException e) {
-                        e.printStackTrace();
-                    }
-                }
-
-                // 到主线程更新 UI
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    // 创建弹窗
-                    androidx.appcompat.app.AlertDialog.Builder builderPackages = new androidx.appcompat.app.AlertDialog.Builder(requireContext());
-
-                    // 加载弹窗布局
-                    View dialogPackagesView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_custom_packages, null);
-                    RecyclerView recyclerView = dialogPackagesView.findViewById(R.id.packages_list);
-                    recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
-
-                    // 获取 Spinner 和 TextView
-                    Spinner dropdownSpinner = dialogPackagesView.findViewById(R.id.dropdown_spinner);
-                    TextView all_package = dialogPackagesView.findViewById(R.id.all_package);
-
-                    // 创建 RecyclerView 的 Adapter
-                    List<Map<String, Object>> filteredList = new ArrayList<>(appInfoHash); // 初始为所有应用
-                    androidx.appcompat.app.AlertDialog dialog;
-
-                    // 更新标题
-                    all_package.setText(String.format("共%d个应用", filteredList.size()));
-
-                    // 设置弹窗布局
-                    builderPackages.setView(dialogPackagesView);
-                    dialog = builderPackages.create();
-
-                    PackageAdapter adapter = new PackageAdapter(filteredList, packageName -> {
-                        inputPackageName.setText(packageName);
-                        Log.d(TAG, "Clicked packageName: " + packageName);
-                        dialog.dismiss();
-                    });
-                    recyclerView.setAdapter(adapter);
-
-                    Map<String, Object> allPackage = new HashMap<>();
-                    allPackage.put("appName", "所有应用");
-                    allPackage.put("packageName", "ALL");
-                    allPackage.put("version", "");
-
-                    // 设置 Spinner 的监听器
-                    dropdownSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                        @Override
-                        public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                            filteredList.clear();
-
-                            switch (position) {
-                                case 0: // 所有应用
-                                    filteredList.add(allPackage);
-                                    filteredList.addAll(appInfoHash);
-                                    break;
-                                case 1: // 用户应用
-                                    filteredList.add(allPackage);
-                                    for (Map<String, Object> app : appInfoHash) {
-                                        if (!(Boolean) app.get("isSystem")) {
-                                            filteredList.add(app);
-                                        }
-                                    }
-                                    break;
-                                case 2: // 系统应用
-                                    filteredList.add(allPackage);
-                                    for (Map<String, Object> app : appInfoHash) {
-                                        if ((Boolean) app.get("isSystem")) {
-                                            filteredList.add(app);
-                                        }
-                                    }
-                                    break;
-                            }
-                            // 更新 RecyclerView 和标题
-                            adapter.notifyDataSetChanged();
-                            all_package.setText(String.format("共%d个应用", filteredList.size() - 1));
-                        }
-
-                        @Override
-                        public void onNothingSelected(AdapterView<?> parent) {
-                            // 默认不做任何操作
-                        }
-                    });
-
-                    // 设置弹窗背景
-                    if (dialog.getWindow() != null) {
-                        dialog.getWindow().setBackgroundDrawableResource(R.drawable.dialog_rounded_background);
-                    }
-
-                    // 隐藏加载进度
-                    loadingOverlay.hide();
-
-                    // 显示弹窗
-                    dialog.show();
-                    dialog.getWindow().setLayout((int) (getResources().getDisplayMetrics().widthPixels * 0.9), (int) (getResources().getDisplayMetrics().heightPixels * 0.9));
-                });
-            });
-        });
-
-        // 默认标签颜色
-        final int[][] newColor = {{Color.GRAY}};
-        final boolean[] isOnOk = {false};
-        Map<String, String> COLORS = JsonHandler.jsonToMap(SharedPreferencesUtils.getStr(context, Constants.COLORS_CONFIG));
-
-        // 如果是编辑模式，填充现有数据
-        if (existingData != null) {
-            inputPackageName.setText((String) existingData.get("packageName"));
-            inputMethodName.setText((String) existingData.get("methodName"));
-            inputClassName.setText((String) existingData.get("className"));
-            inputCategory.setText((String) existingData.get("category"));
-
-            // 设置 Title Args 状态
-            if (existingData.containsKey("title")) {
-                checkboxTitleArgs.setChecked(true);
-                inputTitleArgsIndex.setText(String.valueOf(existingData.get("title")));
-            } else {
-                checkboxTitleArgs.setChecked(false);
-                inputTitleArgsIndex.setText(""); // 清空输入框
-            }
-
-            // 设置 Data Args 状态
-            if (existingData.containsKey("data")) {
-                checkboxDataArgs.setChecked(true);
-                inputDataArgsIndex.setText(String.valueOf(existingData.get("data")));
-            } else {
-                checkboxDataArgs.setChecked(false);
-                inputDataArgsIndex.setText(""); // 清空输入框
-            }
-        }
-
-        // 创建弹窗
-        AlertDialog dialog = builder.create();
-
-        // 设置弹窗背景为圆角背景
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawableResource(R.drawable.dialog_rounded_background);
-        }
-
-        buttonPickColor.setOnClickListener(v -> {
-
-            String category = Objects.requireNonNull(inputCategory.getText()).toString();
-            Log.d(TAG, "showEditDialog: " + category);
-            if (category.isEmpty()) {
-                Toast.makeText(requireContext(), "category 未填写", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            int colorConfig = newColor[0][0];
-            if (COLORS.containsKey(category)) {
-                colorConfig = Color.parseColor(COLORS.get(category));
-            }
-            AmbilWarnaDialog _dialog = new AmbilWarnaDialog(v.getContext(), colorConfig, new AmbilWarnaDialog.OnAmbilWarnaListener() {
-                @Override
-                public void onOk(AmbilWarnaDialog dialog, int color) {
-                    newColor[0][0] = color;
-                    isOnOk[0] = true;
-                }
-
-                @Override
-                public void onCancel(AmbilWarnaDialog dialog) {
-                    // cancel was selected by the user
-                }
-            });
-            _dialog.show();
-        });
-
-        buttonConfirm.setOnClickListener(v -> {
-            Map<String, Object> newData = new HashMap<>();
-            newData.put("packageName", Objects.requireNonNull(inputPackageName.getText()).toString());
-            newData.put("methodName", Objects.requireNonNull(inputMethodName.getText()).toString());
-            newData.put("className", Objects.requireNonNull(inputClassName.getText()).toString());
-            newData.put("category", Objects.requireNonNull(inputCategory.getText()).toString());
-
-            // 颜色储存
-            String category = Objects.requireNonNull(inputCategory.getText()).toString();
-            String colorHex;
-
-            if (COLORS.containsKey(category)) {
-                // 如果标签已存在
-                colorHex = isOnOk[0]
-                        ? String.format("#%06X", (0xFFFFFF & newColor[0][0])) // 用户确认更新
-                        : COLORS.get(category); // 使用已有颜色
-            } else {
-                // 如果标签不存在，直接使用新颜色
-                colorHex = String.format("#%06X", (0xFFFFFF & newColor[0][0]));
-                COLORS.put(category, colorHex);
-                SharedPreferencesUtils.putStr(v.getContext(), Constants.COLORS_CONFIG, JsonHandler.mapToJson(COLORS));
-            }
-
-            // 如果用户确认更新或新增颜色，保存到 SharedPreferences
-            if (isOnOk[0] || !COLORS.containsKey(category)) {
-                COLORS.put(category, colorHex);
-                SharedPreferencesUtils.putStr(v.getContext(), Constants.COLORS_CONFIG, JsonHandler.mapToJson(COLORS));
-            }
-
-
-            // 更新 CategoryAdapter 的标签（避免重复）
-            boolean categoryUpdated = false;
-            for (int i = 0; i < categoryData.size(); i++) {
-                Pair<String, String> pair = categoryData.get(i);
-                if (pair.first.equals(category)) {
-                    // 如果标签已存在，更新颜色
-                    categoryData.set(i, new Pair<>(category, colorHex));
-                    categoryAdapter.notifyItemChanged(i);
-                    categoryUpdated = true;
-                    break;
-                }
-            }
-            if (!categoryUpdated) {
-                // 如果标签不存在，添加新的标签
-                categoryData.add(new Pair<>(category, colorHex));
-                categoryAdapter.notifyItemInserted(categoryData.size() - 1);
-            }
-
-            // 保留原始的 internal 值（如果存在）
-            if (existingData != null) {
-                if (existingData.containsKey("internal")) {
-                    newData.put("internal", existingData.get("internal"));
-                }
-                if (existingData.containsKey("open")) {
-                    newData.put("open", existingData.get("open"));
-                }
-                if (existingData.containsKey("_uuid")) {
-                    newData.put("_uuid", existingData.get("_uuid"));
-                }
-            } else {
-                // 默认值
-                newData.put("internal", false);
-                newData.put("open", true);
-                newData.put("_uuid", UUID.randomUUID().toString());
-            }
-
-            // 根据用户选择处理 Title Args
-            if (checkboxTitleArgs.isChecked()) {
-                // 如果勾选了 Args，使用输入框的值作为 title
-                String titleArgsValue = inputTitleArgsIndex.getText().toString();
-                newData.put("title", titleArgsValue.isEmpty() ? "0" : titleArgsValue);
-            } else {
-                // 如果未勾选 Args，则移除 title
-                newData.remove("title");
-            }
-
-            // 根据用户选择处理 Data Args
-            if (checkboxDataArgs.isChecked()) {
-                // 如果勾选了 Args，使用输入框的值作为 data
-                String dataArgsValue = inputDataArgsIndex.getText().toString();
-                newData.put("data", dataArgsValue.isEmpty() ? "0" : dataArgsValue);
-            } else {
-                // 如果未勾选 Args，则移除 data
-                newData.remove("data");
-            }
-
-            // 调用保存逻辑
-            addOrUpdateItem(newData);
-            dialog.dismiss();
-
-            // 执行回调（如刷新 UI）
-            onSaveCallback.run();
-        });
-
-
-        dialog.show();
-    }
-
-
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        requireActivity().addMenuProvider(new MenuProvider() {
-
-            @Override
-            public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
-                menu.clear(); // 清除现有菜单项，避免重复
-                menuInflater.inflate(R.menu.settings_drawer, menu); // 加载菜单
-            }
-
-            @SuppressLint("NotifyDataSetChanged")
-            @Override
-            public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
-                int itemId = menuItem.getItemId();
-                if (itemId == R.id.add_text) {
-                    Log.d(TAG, "onMenuItemSelected: ADD TEXT");
-
-                    // 调用弹窗，新增数据
-                    showEditDialog(null, requireContext(), () -> {
-                        adapter.notifyDataSetChanged();
-                    });
-
-                    return true;
-                }
-                return false;
-            }
-
-        }, getViewLifecycleOwner(), Lifecycle.State.RESUMED);
     }
 
     private boolean isCategoryReferenced(String category) {
@@ -727,7 +182,10 @@ public class SettingsFragment extends Fragment {
     }
 
     private boolean isBuiltInCategory(String category) {
-        return "Intent".equalsIgnoreCase(category) || "Scheme".equalsIgnoreCase(category);
+        return "Intent".equalsIgnoreCase(category)
+                || "Scheme".equalsIgnoreCase(category)
+                || "intent".equalsIgnoreCase(category)
+                || "scheme".equalsIgnoreCase(category);
     }
 
     private String normalizeFilterGroup(String category) {
@@ -768,10 +226,807 @@ public class SettingsFragment extends Fragment {
         }
     }
 
+    private void showColorPickerDialog(Context context, String category) {
+        Map<String, String> COLORS = JsonHandler.jsonToMap(SharedPreferencesUtils.getStr(context, Constants.COLORS_CONFIG));
+        int color = COLORS.containsKey(category) ? Color.parseColor(COLORS.get(category)) : Color.GRAY;
+        AmbilWarnaDialog dialog = new AmbilWarnaDialog(context, color, new AmbilWarnaDialog.OnAmbilWarnaListener() {
+            @Override
+            public void onOk(AmbilWarnaDialog dialog, int color) {
+                String colorHex = String.format("#%06X", (0xFFFFFF & color));
+                COLORS.put(category, colorHex);
+                SharedPreferencesUtils.putStr(context, Constants.COLORS_CONFIG, JsonHandler.mapToJson(COLORS));
+                for (int i = 0; i < categoryData.size(); i++) {
+                    if (categoryData.get(i).first.equals(category)) {
+                        categoryData.set(i, new Pair<>(category, colorHex));
+                        categoryAdapter.notifyItemChanged(i);
+                        break;
+                    }
+                }
+            }
+
+            @Override
+            public void onCancel(AmbilWarnaDialog dialog) {
+            }
+        });
+        dialog.show();
+    }
+
+    private void prepareCategoryData() {
+        categoryData.clear();
+        categoryData.add(new Pair<>(ALL_STRING, "#808080"));
+
+        String colorsJson = SharedPreferencesUtils.getStr(requireContext(), Constants.COLORS_CONFIG);
+
+        try {
+            Map<String, String> colorMap = JsonHandler.jsonToMap(colorsJson);
+            for (Map.Entry<String, String> entry : colorMap.entrySet()) {
+                categoryData.add(new Pair<>(entry.getKey(), entry.getValue()));
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "解析颜色配置失败: " + e.getMessage());
+        }
+    }
+
+    private void onCategorySelected(String category) {
+        selectedCategory = category;
+        filterData(category);
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private void filterData(String category) {
+        filteredData.clear();
+        if (ALL_STRING.equals(category)) {
+            filteredData.addAll(dataList);
+        } else {
+            for (Map<String, Object> item : dataList) {
+                String itemCategory = (String) item.get("category");
+                if (category.equals(itemCategory)) {
+                    filteredData.add(item);
+                }
+            }
+        }
+        Log.d(TAG, "Filter applied. Category: " + category + ", filteredData size: " + filteredData.size());
+        adapter.notifyDataSetChanged();
+    }
+
+    private void saveData() {
+        List<Map<String, Object>> internalList = new ArrayList<>();
+        List<Map<String, Object>> externalList = new ArrayList<>();
+
+        classifyData(dataList, internalList, externalList);
+
+        saveToPreferences(Constants.INTERNAL_HOOKS_CONFIG, internalList);
+        saveToPreferences(Constants.EXTERNAL_HOOKS_CONFIG, externalList);
+
+        Log.d(TAG, "数据已保存到 SharedPreferences");
+    }
+
+    private void classifyData(List<Map<String, Object>> sourceList, List<Map<String, Object>> internalList, List<Map<String, Object>> externalList) {
+        for (Map<String, Object> item : sourceList) {
+            Boolean isInternal = (Boolean) item.get("internal");
+            if (isInternal != null && isInternal) {
+                internalList.add(item);
+            } else {
+                externalList.add(item);
+            }
+        }
+    }
+
+    private void saveToPreferences(String key, List<Map<String, Object>> dataList) {
+        String jsonData = dataList.isEmpty() ? null : JsonHandler.serializeHookedRecords(dataList);
+        SharedPreferencesUtils.putStr(requireContext(), key, jsonData);
+        Log.d(TAG, key + " saved: " + jsonData);
+    }
+
+    public int findIndexByUuid(List<Map<String, Object>> dataList, String targetUuid) {
+        for (int i = 0; i < dataList.size(); i++) {
+            Map<String, Object> item = dataList.get(i);
+            if (item.containsKey("_uuid") && targetUuid != null && targetUuid.equals(item.get("_uuid"))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private void addOrUpdateItem(Map<String, Object> newItem) {
+        String newPackageName = (String) newItem.get("packageName");
+        String newClassName = (String) newItem.get("className");
+        String newMethodName = (String) newItem.get("methodName");
+        String newCategory = (String) newItem.get("category");
+
+        if (newClassName == null || newMethodName == null || newCategory == null || newPackageName == null ||
+                newClassName.isEmpty() || newMethodName.isEmpty() || newCategory.isEmpty() || newPackageName.isEmpty()) {
+            Toast.makeText(requireContext(), "className、methodName、packageName、category 不能为空", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        int index = findIndexByUuid(dataList, (String) newItem.get("_uuid"));
+
+        if (index != -1) {
+            dataList.set(index, newItem);
+            Log.d(TAG, "Item updated at index: " + index + ", new state: " + newItem);
+            Toast.makeText(requireContext(), "记录已更新", Toast.LENGTH_SHORT).show();
+        } else {
+            dataList.add(newItem);
+            Log.d(TAG, "Item added: " + newItem);
+            Toast.makeText(requireContext(), "新记录已添加", Toast.LENGTH_SHORT).show();
+        }
+
+        saveData();
+        filterData(selectedCategory);
+    }
+
+    private List<Map<String, Object>> prepareData() {
+        List<Map<String, Object>> list = new ArrayList<>();
+
+        loadFromPreferences(Constants.INTERNAL_HOOKS_CONFIG, true, list);
+        loadFromPreferences(Constants.EXTERNAL_HOOKS_CONFIG, false, list);
+
+        return list;
+    }
+
+    private void loadFromPreferences(String key, boolean isInternal, List<Map<String, Object>> targetList) {
+        String config = SharedPreferencesUtils.getStr(requireContext(), key);
+        if (config != null) {
+            List<Map<String, Object>> records = JsonHandler.deserializeHookedRecords(config);
+            for (Map<String, Object> item : records) {
+                if (!item.containsKey("_uuid")) {
+                    item.put("_uuid", UUID.randomUUID().toString());
+                }
+                item.put("internal", isInternal);
+                targetList.add(item);
+            }
+        }
+    }
+
+    @SuppressLint({"ClickableViewAccessibility", "DefaultLocale"})
+    private void showEditDialog(@Nullable Map<String, Object> existingData,
+                                @Nullable Map<String, Object> presetData,
+                                @NonNull Context context,
+                                @NonNull Runnable onSaveCallback) {
+
+        View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_custom_hook, null);
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setView(dialogView);
+
+        TextInputEditText inputPackageName = dialogView.findViewById(R.id.input_package_name);
+        TextInputEditText inputMethodName = dialogView.findViewById(R.id.input_method_name);
+        TextInputEditText inputClassName = dialogView.findViewById(R.id.input_class_name);
+        TextInputEditText inputCategory = dialogView.findViewById(R.id.input_category);
+        EditText inputTitleArgsIndex = dialogView.findViewById(R.id.input_title_args_index);
+        EditText inputDataArgsIndex = dialogView.findViewById(R.id.input_data_args_index);
+        CheckBox checkboxTitleArgs = dialogView.findViewById(R.id.checkbox_title_args);
+        CheckBox checkboxDataArgs = dialogView.findViewById(R.id.checkbox_data_args);
+        Button buttonConfirm = dialogView.findViewById(R.id.button_confirm);
+        Button buttonPickColor = dialogView.findViewById(R.id.button_pick_color);
+
+        TextInputLayout idTILQuery = dialogView.findViewById(R.id.idTILQuery);
+        idTILQuery.setEndIconOnClickListener(view -> {
+            LoadingOverlay loadingOverlay = new LoadingOverlay(requireContext());
+            loadingOverlay.setLoadingText("正在加载应用列表...");
+            loadingOverlay.show();
+
+            Executor executor = Executors.newSingleThreadExecutor();
+            executor.execute(() -> {
+                PackageManager packageManager = requireContext().getPackageManager();
+                List<ApplicationInfo> installedApplications = packageManager.getInstalledApplications(PackageManager.GET_META_DATA);
+
+                List<Map<String, Object>> appInfoHash = new ArrayList<>();
+
+                for (ApplicationInfo app : installedApplications) {
+                    Map<String, Object> appInfo = new HashMap<>();
+                    try {
+                        appInfo.put("isSystem", (app.flags & ApplicationInfo.FLAG_SYSTEM) != 0);
+                        appInfo.put("appName", packageManager.getApplicationLabel(app));
+                        appInfo.put("packageName", app.packageName);
+
+                        PackageInfo packageInfo = packageManager.getPackageInfo(app.packageName, 0);
+                        appInfo.put("version", String.format("%s(%s)", packageInfo.versionName, packageInfo.versionCode));
+
+                        appInfoHash.add(appInfo);
+                    } catch (PackageManager.NameNotFoundException e) {
+                        Log.e(TAG, "应用信息加载失败", e);
+                    }
+                }
+
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    androidx.appcompat.app.AlertDialog.Builder builderPackages = new androidx.appcompat.app.AlertDialog.Builder(requireContext());
+
+                    View dialogPackagesView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_custom_packages, null);
+                    RecyclerView recyclerView = dialogPackagesView.findViewById(R.id.packages_list);
+                    recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
+
+                    Spinner dropdownSpinner = dialogPackagesView.findViewById(R.id.dropdown_spinner);
+                    TextView all_package = dialogPackagesView.findViewById(R.id.all_package);
+
+                    List<Map<String, Object>> filteredList = new ArrayList<>(appInfoHash);
+                    androidx.appcompat.app.AlertDialog dialog;
+
+                    all_package.setText(String.format("共%d个应用", filteredList.size()));
+
+                    builderPackages.setView(dialogPackagesView);
+                    dialog = builderPackages.create();
+
+                    PackageAdapter adapter = new PackageAdapter(filteredList, packageName -> {
+                        inputPackageName.setText(packageName);
+                        dialog.dismiss();
+                    });
+                    recyclerView.setAdapter(adapter);
+
+                    Map<String, Object> allPackage = new HashMap<>();
+                    allPackage.put("appName", "所有应用");
+                    allPackage.put("packageName", "ALL");
+                    allPackage.put("version", "");
+
+                    dropdownSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                        @Override
+                        public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                            filteredList.clear();
+
+                            switch (position) {
+                                case 0:
+                                    filteredList.add(allPackage);
+                                    filteredList.addAll(appInfoHash);
+                                    break;
+                                case 1:
+                                    filteredList.add(allPackage);
+                                    for (Map<String, Object> app : appInfoHash) {
+                                        if (!(Boolean) app.get("isSystem")) {
+                                            filteredList.add(app);
+                                        }
+                                    }
+                                    break;
+                                case 2:
+                                    filteredList.add(allPackage);
+                                    for (Map<String, Object> app : appInfoHash) {
+                                        if ((Boolean) app.get("isSystem")) {
+                                            filteredList.add(app);
+                                        }
+                                    }
+                                    break;
+                            }
+
+                            adapter.notifyDataSetChanged();
+                            all_package.setText(String.format("共%d个应用", filteredList.size() - 1));
+                        }
+
+                        @Override
+                        public void onNothingSelected(AdapterView<?> parent) {
+                        }
+                    });
+
+                    if (dialog.getWindow() != null) {
+                        dialog.getWindow().setBackgroundDrawableResource(R.drawable.dialog_rounded_background);
+                    }
+
+                    loadingOverlay.hide();
+
+                    dialog.show();
+                    if (dialog.getWindow() != null) {
+                        dialog.getWindow().setLayout(
+                                (int) (getResources().getDisplayMetrics().widthPixels * 0.9),
+                                (int) (getResources().getDisplayMetrics().heightPixels * 0.9)
+                        );
+                    }
+                });
+            });
+        });
+
+        final int[][] newColor = {{Color.GRAY}};
+        final boolean[] isOnOk = {false};
+        Map<String, String> COLORS = JsonHandler.jsonToMap(SharedPreferencesUtils.getStr(context, Constants.COLORS_CONFIG));
+
+        Map<String, Object> initialData = existingData != null ? existingData : presetData;
+        if (initialData != null) {
+            inputPackageName.setText((String) initialData.get("packageName"));
+            inputMethodName.setText((String) initialData.get("methodName"));
+            inputClassName.setText((String) initialData.get("className"));
+            inputCategory.setText((String) initialData.get("category"));
+
+            if (initialData.containsKey("title")) {
+                checkboxTitleArgs.setChecked(true);
+                inputTitleArgsIndex.setText(String.valueOf(initialData.get("title")));
+            } else {
+                checkboxTitleArgs.setChecked(false);
+                inputTitleArgsIndex.setText("");
+            }
+
+            if (initialData.containsKey("data")) {
+                checkboxDataArgs.setChecked(true);
+                inputDataArgsIndex.setText(String.valueOf(initialData.get("data")));
+            } else {
+                checkboxDataArgs.setChecked(false);
+                inputDataArgsIndex.setText("");
+            }
+        }
+
+        AlertDialog dialog = builder.create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(R.drawable.dialog_rounded_background);
+        }
+
+        buttonPickColor.setOnClickListener(v -> {
+            String category = Objects.requireNonNull(inputCategory.getText()).toString();
+            if (category.isEmpty()) {
+                Toast.makeText(requireContext(), "category 未填写", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            int colorConfig = newColor[0][0];
+            if (COLORS.containsKey(category)) {
+                colorConfig = Color.parseColor(COLORS.get(category));
+            }
+
+            AmbilWarnaDialog colorDialog = new AmbilWarnaDialog(v.getContext(), colorConfig, new AmbilWarnaDialog.OnAmbilWarnaListener() {
+                @Override
+                public void onOk(AmbilWarnaDialog dialog, int color) {
+                    newColor[0][0] = color;
+                    isOnOk[0] = true;
+                }
+
+                @Override
+                public void onCancel(AmbilWarnaDialog dialog) {
+                }
+            });
+            colorDialog.show();
+        });
+
+        buttonConfirm.setOnClickListener(v -> {
+            Map<String, Object> newData = new HashMap<>();
+            newData.put("packageName", Objects.requireNonNull(inputPackageName.getText()).toString());
+            newData.put("methodName", Objects.requireNonNull(inputMethodName.getText()).toString());
+            newData.put("className", Objects.requireNonNull(inputClassName.getText()).toString());
+            newData.put("category", Objects.requireNonNull(inputCategory.getText()).toString());
+
+            Map<String, Object> metadataSource = existingData != null ? existingData : presetData;
+
+            String category = Objects.requireNonNull(inputCategory.getText()).toString();
+            String colorHex;
+
+            if (COLORS.containsKey(category)) {
+                colorHex = isOnOk[0]
+                        ? String.format("#%06X", (0xFFFFFF & newColor[0][0]))
+                        : COLORS.get(category);
+            } else {
+                colorHex = String.format("#%06X", (0xFFFFFF & newColor[0][0]));
+                COLORS.put(category, colorHex);
+                SharedPreferencesUtils.putStr(v.getContext(), Constants.COLORS_CONFIG, JsonHandler.mapToJson(COLORS));
+            }
+
+            if (isOnOk[0] || !COLORS.containsKey(category)) {
+                COLORS.put(category, colorHex);
+                SharedPreferencesUtils.putStr(v.getContext(), Constants.COLORS_CONFIG, JsonHandler.mapToJson(COLORS));
+            }
+
+            boolean categoryUpdated = false;
+            for (int i = 0; i < categoryData.size(); i++) {
+                Pair<String, String> pair = categoryData.get(i);
+                if (pair.first.equals(category)) {
+                    categoryData.set(i, new Pair<>(category, colorHex));
+                    categoryAdapter.notifyItemChanged(i);
+                    categoryUpdated = true;
+                    break;
+                }
+            }
+            if (!categoryUpdated) {
+                categoryData.add(new Pair<>(category, colorHex));
+                categoryAdapter.notifyItemInserted(categoryData.size() - 1);
+            }
+
+            if (existingData != null) {
+                if (existingData.containsKey("internal")) {
+                    newData.put("internal", existingData.get("internal"));
+                }
+                if (existingData.containsKey("open")) {
+                    newData.put("open", existingData.get("open"));
+                }
+                if (existingData.containsKey("_uuid")) {
+                    newData.put("_uuid", existingData.get("_uuid"));
+                }
+            } else {
+                newData.put("internal", false);
+                newData.put("open", true);
+                newData.put("_uuid", UUID.randomUUID().toString());
+            }
+
+            if (checkboxTitleArgs.isChecked()) {
+                String titleArgsValue = inputTitleArgsIndex.getText().toString();
+                newData.put("title", titleArgsValue.isEmpty() ? "0" : titleArgsValue);
+            } else {
+                newData.remove("title");
+            }
+
+            if (checkboxDataArgs.isChecked()) {
+                String dataArgsValue = inputDataArgsIndex.getText().toString();
+                newData.put("data", dataArgsValue.isEmpty() ? "0" : dataArgsValue);
+            } else {
+                newData.remove("data");
+            }
+
+            addOrUpdateItem(newData);
+            dialog.dismiss();
+            onSaveCallback.run();
+        });
+
+        dialog.show();
+    }
+
+    private void showAddEntryModeDialog() {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("添加方式")
+                .setItems(new String[]{"手动添加", "云端导入"}, (dialog, which) -> {
+                    if (which == 0) {
+                        showEditDialog(null, null, requireContext(), () -> adapter.notifyDataSetChanged());
+                    } else if (which == 1) {
+                        showCloudConfigDialog();
+                    }
+                })
+                .show();
+    }
+
+    private void showCloudConfigDialog() {
+        View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_cloud_config, null);
+
+        AutoCompleteTextView inputUrl = dialogView.findViewById(R.id.input_cloud_url);
+        Button requestButton = dialogView.findViewById(R.id.button_request_cloud);
+        ProgressBar progressBar = dialogView.findViewById(R.id.cloud_progress_bar);
+        TextView emptyView = dialogView.findViewById(R.id.cloud_empty_view);
+        RecyclerView recyclerView = dialogView.findViewById(R.id.cloud_recycler_view);
+
+        recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        builder.setView(dialogView);
+        AlertDialog dialog = builder.create();
+
+        ArrayAdapter<String> urlHistoryAdapter = new ArrayAdapter<>(
+                requireContext(),
+                android.R.layout.simple_dropdown_item_1line,
+                new ArrayList<>()
+        );
+        inputUrl.setAdapter(urlHistoryAdapter);
+        inputUrl.setThreshold(0);
+        refreshCloudUrlHistoryAdapter(urlHistoryAdapter);
+
+        inputUrl.setOnClickListener(v -> inputUrl.showDropDown());
+        inputUrl.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) {
+                inputUrl.showDropDown();
+            }
+        });
+
+        inputUrl.setOnLongClickListener(v -> {
+            String currentUrl = trimToEmpty(inputUrl.getText().toString());
+            if (currentUrl.isEmpty()) {
+                Toast.makeText(requireContext(), "当前没有可删除的地址", Toast.LENGTH_SHORT).show();
+                return true;
+            }
+
+            showDeleteCloudUrlDialog(currentUrl, inputUrl, urlHistoryAdapter);
+            return true;
+        });
+
+        CloudConfigAdapter cloudAdapter = new CloudConfigAdapter(new ArrayList<>(), templateData -> {
+            dialog.dismiss();
+            new Handler(Looper.getMainLooper()).post(() ->
+                    showEditDialog(null, templateData, requireContext(), () -> adapter.notifyDataSetChanged())
+            );
+        });
+        recyclerView.setAdapter(cloudAdapter);
+
+        String initUrl = getInitialCloudConfigUrl();
+        if (!initUrl.isEmpty()) {
+            inputUrl.setText(initUrl, false);
+        }
+
+        requestButton.setOnClickListener(v -> {
+            String url = trimToEmpty(inputUrl.getText().toString());
+            if (url.isEmpty()) {
+                Toast.makeText(requireContext(), "接口地址不能为空", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (url.startsWith("REPLACE_WITH_")) {
+                Toast.makeText(requireContext(), "请先把 Constants.DEFAULT_CLOUD_CONFIG_URL 改成你的真实 GitHub Raw JSON 地址", Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            requestCloudTemplates(url, cloudAdapter, progressBar, emptyView, recyclerView, () -> {
+                rememberCloudConfigUrl(url);
+                refreshCloudUrlHistoryAdapter(urlHistoryAdapter);
+                inputUrl.setText(url, false);
+            });
+        });
+
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(R.drawable.dialog_rounded_background);
+            dialog.getWindow().setLayout(
+                    (int) (getResources().getDisplayMetrics().widthPixels * 0.95),
+                    (int) (getResources().getDisplayMetrics().heightPixels * 0.9)
+            );
+        }
+
+        if (!initUrl.isEmpty() && !initUrl.startsWith("REPLACE_WITH_")) {
+            requestCloudTemplates(initUrl, cloudAdapter, progressBar, emptyView, recyclerView, () -> {
+                rememberCloudConfigUrl(initUrl);
+                refreshCloudUrlHistoryAdapter(urlHistoryAdapter);
+                inputUrl.setText(initUrl, false);
+            });
+        }
+    }
+
+    private void showDeleteCloudUrlDialog(String url,
+                                          AutoCompleteTextView inputUrl,
+                                          ArrayAdapter<String> urlHistoryAdapter) {
+
+        List<String> history = getCloudConfigUrlHistory();
+        if (!history.contains(url)) {
+            Toast.makeText(requireContext(), "当前地址不在历史列表中", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("删除地址")
+                .setMessage("从历史地址中删除当前 URL？\n\n" + url)
+                .setPositiveButton("删除", (dialog, which) -> {
+                    deleteCloudConfigUrl(url);
+                    refreshCloudUrlHistoryAdapter(urlHistoryAdapter);
+
+                    String nextUrl = getInitialCloudConfigUrl();
+                    inputUrl.setText(nextUrl, false);
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void requestCloudTemplates(String url,
+                                       CloudConfigAdapter cloudAdapter,
+                                       ProgressBar progressBar,
+                                       TextView emptyView,
+                                       RecyclerView recyclerView,
+                                       @Nullable Runnable onSuccessAction) {
+
+        progressBar.setVisibility(View.VISIBLE);
+        recyclerView.setVisibility(View.GONE);
+        emptyView.setVisibility(View.VISIBLE);
+        emptyView.setText("正在请求云配置...");
+
+        networkClient.getJsonArray(url, new NetworkClient.JsonArrayCallback() {
+            @Override
+            public void onSuccess(JSONArray data) {
+                List<Map<String, Object>> templateList = parseCloudConfigList(data);
+
+                progressBar.setVisibility(View.GONE);
+                cloudAdapter.updateData(templateList);
+
+                if (templateList.isEmpty()) {
+                    recyclerView.setVisibility(View.GONE);
+                    emptyView.setVisibility(View.VISIBLE);
+                    emptyView.setText("没有可用的云配置");
+                } else {
+                    recyclerView.setVisibility(View.VISIBLE);
+                    emptyView.setVisibility(View.GONE);
+                }
+
+                if (onSuccessAction != null) {
+                    onSuccessAction.run();
+                }
+            }
+
+            @Override
+            public void onFailure(String errorMessage) {
+                progressBar.setVisibility(View.GONE);
+                recyclerView.setVisibility(View.GONE);
+                emptyView.setVisibility(View.VISIBLE);
+                emptyView.setText(errorMessage);
+                Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private List<Map<String, Object>> parseCloudConfigList(JSONArray jsonArray) {
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (int i = 0; i < jsonArray.length(); i++) {
+            try {
+                JSONObject obj = jsonArray.getJSONObject(i);
+
+                Map<String, Object> item = new HashMap<>();
+
+                String name = firstNonEmpty(obj, "name", "nickname", "nickName");
+                String remark = firstNonEmpty(obj, "remark", "note", "desc", "description");
+                String packageName = firstNonEmpty(obj, "packageName", "package_name", "package");
+                String className = firstNonEmpty(obj, "className", "class_name", "class");
+                String methodName = firstNonEmpty(obj, "methodName", "method_name", "method");
+                String category = firstNonEmpty(obj, "category", "tag");
+                String title = firstNonEmpty(obj, "title", "titleIndex", "title_index");
+                String data = firstNonEmpty(obj, "data", "dataIndex", "data_index");
+
+                if (!name.isEmpty()) {
+                    item.put("name", name);
+                }
+                if (!remark.isEmpty()) {
+                    item.put("remark", remark);
+                }
+                if (!packageName.isEmpty()) {
+                    item.put("packageName", packageName);
+                }
+                if (!className.isEmpty()) {
+                    item.put("className", className);
+                }
+                if (!methodName.isEmpty()) {
+                    item.put("methodName", methodName);
+                }
+                if (!category.isEmpty()) {
+                    item.put("category", category);
+                }
+                if (!title.isEmpty()) {
+                    item.put("title", title);
+                }
+                if (!data.isEmpty()) {
+                    item.put("data", data);
+                }
+
+                if (!item.isEmpty()) {
+                    result.add(item);
+                }
+            } catch (JSONException e) {
+                Log.e(TAG, "parseCloudConfigList: 解析单条模板失败", e);
+            }
+        }
+
+        return result;
+    }
+
+    private String firstNonEmpty(JSONObject obj, String... keys) {
+        for (String key : keys) {
+            if (obj.has(key) && !obj.isNull(key)) {
+                String value = obj.optString(key, "").trim();
+                if (!value.isEmpty()) {
+                    return value;
+                }
+            }
+        }
+        return "";
+    }
+
+    private String getInitialCloudConfigUrl() {
+        String current = trimToEmpty(SharedPreferencesUtils.getStr(requireContext(), Constants.CLOUD_CONFIG_URL));
+        if (!current.isEmpty()) {
+            return current;
+        }
+
+        List<String> history = getCloudConfigUrlHistory();
+        if (!history.isEmpty()) {
+            return history.get(0);
+        }
+
+        return trimToEmpty(Constants.DEFAULT_CLOUD_CONFIG_URL);
+    }
+
+    private List<String> getCloudConfigUrlHistory() {
+        List<String> result = new ArrayList<>();
+
+        String historyJson = SharedPreferencesUtils.getStr(requireContext(), Constants.CLOUD_CONFIG_URL_HISTORY);
+        if (historyJson == null) {
+            String defaultUrl = trimToEmpty(Constants.DEFAULT_CLOUD_CONFIG_URL);
+            if (isValidCloudUrlForHistory(defaultUrl)) {
+                result.add(defaultUrl);
+            }
+        } else {
+            try {
+                JSONArray jsonArray = new JSONArray(historyJson);
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    String url = trimToEmpty(jsonArray.optString(i));
+                    if (isValidCloudUrlForHistory(url) && !result.contains(url)) {
+                        result.add(url);
+                    }
+                }
+            } catch (JSONException e) {
+                Log.e(TAG, "读取云配置 URL 历史失败", e);
+            }
+        }
+
+        String current = trimToEmpty(SharedPreferencesUtils.getStr(requireContext(), Constants.CLOUD_CONFIG_URL));
+        if (isValidCloudUrlForHistory(current)) {
+            result.remove(current);
+            result.add(0, current);
+        }
+
+        return result;
+    }
+
+    private void refreshCloudUrlHistoryAdapter(ArrayAdapter<String> adapter) {
+        adapter.clear();
+        adapter.addAll(getCloudConfigUrlHistory());
+        adapter.notifyDataSetChanged();
+    }
+
+    private void rememberCloudConfigUrl(String url) {
+        String normalized = trimToEmpty(url);
+        if (!isValidCloudUrlForHistory(normalized)) {
+            return;
+        }
+
+        List<String> history = getCloudConfigUrlHistory();
+        history.remove(normalized);
+        history.add(0, normalized);
+
+        if (history.size() > MAX_CLOUD_URL_HISTORY) {
+            history = new ArrayList<>(history.subList(0, MAX_CLOUD_URL_HISTORY));
+        }
+
+        persistCloudConfigUrlHistory(history);
+        SharedPreferencesUtils.putStr(requireContext(), Constants.CLOUD_CONFIG_URL, normalized);
+    }
+
+    private void deleteCloudConfigUrl(String url) {
+        String normalized = trimToEmpty(url);
+        if (normalized.isEmpty()) {
+            return;
+        }
+
+        List<String> history = getCloudConfigUrlHistory();
+        history.remove(normalized);
+
+        persistCloudConfigUrlHistory(history);
+
+        String current = trimToEmpty(SharedPreferencesUtils.getStr(requireContext(), Constants.CLOUD_CONFIG_URL));
+        if (normalized.equals(current)) {
+            String next = history.isEmpty() ? null : history.get(0);
+            SharedPreferencesUtils.putStr(requireContext(), Constants.CLOUD_CONFIG_URL, next);
+        }
+    }
+
+    private void persistCloudConfigUrlHistory(List<String> history) {
+        JSONArray jsonArray = new JSONArray();
+        for (String url : history) {
+            if (isValidCloudUrlForHistory(url)) {
+                jsonArray.put(url);
+            }
+        }
+        SharedPreferencesUtils.putStr(requireContext(), Constants.CLOUD_CONFIG_URL_HISTORY, jsonArray.toString());
+    }
+
+    private boolean isValidCloudUrlForHistory(String url) {
+        return url != null
+                && !url.trim().isEmpty()
+                && !url.startsWith("REPLACE_WITH_");
+    }
+
+    private String trimToEmpty(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        requireActivity().addMenuProvider(new MenuProvider() {
+
+            @Override
+            public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
+                menu.clear();
+                menuInflater.inflate(R.menu.settings_drawer, menu);
+            }
+
+            @Override
+            public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
+                if (menuItem.getItemId() == R.id.add_text) {
+                    showAddEntryModeDialog();
+                    return true;
+                }
+                return false;
+            }
+
+        }, getViewLifecycleOwner(), Lifecycle.State.RESUMED);
+    }
+
     @Override
     public void onPause() {
         super.onPause();
-        saveData(); // 离开页面时保存数据
+        saveData();
     }
-
 }

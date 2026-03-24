@@ -57,6 +57,12 @@
         tools:layout="@layout/fragment_select" />
 
     <fragment
+        android:id="@+id/nav_blocker"
+        android:name="com.fourtwo.hookintent.ui.blocker.BlockerFragment"
+        android:label="@string/menu_blocker"
+        tools:layout="@layout/fragment_blocker" />
+
+    <fragment
         android:id="@+id/nav_select"
         android:name="com.fourtwo.hookintent.ui.select.SelectFragment"
         tools:layout="@layout/fragment_select" />
