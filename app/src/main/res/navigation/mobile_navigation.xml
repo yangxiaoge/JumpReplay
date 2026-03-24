@@ -63,6 +63,12 @@
         tools:layout="@layout/fragment_blocker" />
 
     <fragment
+        android:id="@+id/nav_history"
+        android:name="com.fourtwo.hookintent.ui.history.HistoryFragment"
+        android:label="@string/menu_history"
+        tools:layout="@layout/fragment_history" />
+
+    <fragment
         android:id="@+id/nav_select"
         android:name="com.fourtwo.hookintent.ui.select.SelectFragment"
         tools:layout="@layout/fragment_select" />

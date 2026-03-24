@@ -26,6 +26,11 @@
         android:checkableBehavior="single">
 
         <item
+            android:id="@+id/nav_blocker"
+            android:icon="@drawable/intercept"
+            android:title="@string/menu_blocker" />
+
+        <item
             android:id="@+id/nav_intercept"
             android:icon="@drawable/intercept"
             android:title="@string/menu_intercept" />
@@ -35,20 +40,27 @@
             android:icon="@drawable/disabled"
             android:title="@string/disabled" />
 
-        <item
-            android:id="@+id/nav_blocker"
-            android:icon="@drawable/filter_list_off"
-            android:title="@string/menu_blocker" />
-
     </group>
 
     <group
         android:id="@+id/group3"
         android:checkableBehavior="single">
+
+        <item
+            android:id="@+id/nav_history"
+            android:icon="@drawable/gallery"
+            android:title="@string/menu_history" />
+
+        <item
+            android:id="@+id/nav_feedback"
+            android:icon="@drawable/help"
+            android:title="@string/menu_feedback" />
+
         <item
             android:id="@+id/nav_setup"
             android:icon="@drawable/settings"
             android:title="@string/setup" />
+
         <item
             android:id="@+id/nav_me"
             android:icon="@drawable/slideshow"
