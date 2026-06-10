@@ -1,11 +1,14 @@
-# JumpReplay
+# JumpReplay (系统签名重构版)
 
-[![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/FourTwooo/JumpReplay?label=version&logo=github)](https://github.com/FourTwooo/JumpReplay/releases) 
-[![加入QQ群](https://img.shields.io/badge/QQ群-1021904342-blue?logo=qq)](https://qm.qq.com/cgi-bin/qm/qr?k=6JWWosRVV0rtISqQKNVU5QY8KT0sBQP8&jump_from=webapi&authKey=kvD0trmJvJiWSeFVv1+WTUYBpalYGKh+dF3zgfpLDuByEmZF2wT8XXwC8QuT/tzQ) 
-[![License](https://img.shields.io/badge/license-GPL%203.0-blue)](https://raw.githubusercontent.com/FourTwooo/JumpReplay/refs/heads/master/LICENSE) 
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/FourTwooo/JumpReplay/total?logo=github)
+**本项目是基于原开源项目 [FourTwooo/JumpReplay](https://github.com/FourTwooo/JumpReplay) 的二次修改版本（Fork），严格遵循 GNU GPL v3 开源协议。**
 
-**Xposed Hook Android Intent/Scheme**
+### 🛠️ 二次修改与重构说明（符合 GPLv3 声明）
+* **修改日期**：2026年6月10日
+* **核心重构内容**：
+  1. **彻底剥离 Xposed 框架**：删除了所有 Xposed Bridge 依赖、模块声明与 Hook 入口。
+  2. **系统签名与特权运行**：配置 `platform.keystore` 进行系统级签名，并声明 `android:sharedUserId="android.uid.system"` 获得系统级 UID。
+  3. **全局 IActivityController 拦截**：不再依赖 Xposed 在各个应用进程中注入，改用系统特权通过反射向 `ActivityManagerService` 注册内建的 `IActivityController` 拦截桩，实现对全系统所有第三方应用跳转意图的**全局、免 Xposed、免 Root 拦截与记录**。
+  4. **同进程本地通信优化**：重构了列表渲染的接收机制（`DataProcessor` 兼容单条本地数据传输），不再依赖 Xposed 版本的 IPC 批处理 JSON 反序列化过程，彻底消除 NullPointerException 崩溃隐患。
 
 ---
 

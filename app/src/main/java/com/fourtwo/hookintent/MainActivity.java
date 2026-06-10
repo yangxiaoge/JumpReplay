@@ -49,7 +49,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView versionTextView;
 
     public static boolean isXposed() {
-        return false;
+        return com.fourtwo.hookintent.service.SystemMonitorService.isRunning();
     }
 
     @Override
@@ -96,6 +96,30 @@ public class MainActivity extends AppCompatActivity {
         showLegalNoticeIfNeeded(() -> {
             refreshVersionHeader();
             checkForAppUpdate();
+            
+            // 显式启动 MessengerService 以接收跳转数据并渲染列表
+            try {
+                Intent messengerIntent = new Intent(this, com.fourtwo.hookintent.service.MessengerService.class);
+                startService(messengerIntent);
+            } catch (Exception e) {
+                Log.e(TAG, "启动 MessengerService 失败", e);
+            }
+            
+            // 如果用户之前开启了监听，则在进入应用时自动启动系统监听服务
+            boolean isEnabled = SharedPreferencesUtils.getBoolean(this, "controller_enabled");
+            if (isEnabled) {
+                try {
+                    Intent serviceIntent = new Intent(this, com.fourtwo.hookintent.service.SystemMonitorService.class);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(serviceIntent);
+                    } else {
+                        startService(serviceIntent);
+                    }
+                    Log.d(TAG, "自动恢复启动系统跳转监听服务");
+                } catch (Exception e) {
+                    Log.e(TAG, "自动启动监听服务失败", e);
+                }
+            }
         });
     }
 

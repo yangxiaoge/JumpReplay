@@ -6,12 +6,77 @@
     android:orientation="vertical"
     android:padding="20dp">
 
+    <!-- 新增：系统签名状态指示 -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/card_system_signature_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="10dp"
+        android:foreground="?attr/selectableItemBackground"
+        app:cardBackgroundColor="@color/light_red"
+        app:cardCornerRadius="36dp"
+        app:cardElevation="0dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="16dp">
+
+            <!-- 图标 + 圆形背景 -->
+            <RelativeLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_circle">
+
+                <ImageView
+                    android:id="@+id/sys_sig_icon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_centerInParent="true"
+                    android:contentDescription="TODO"
+                    android:src="@drawable/outline_cancel_24"
+                    app:tint="@color/teal_700" />
+
+            </RelativeLayout>
+
+            <!-- 文本内容 -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:orientation="vertical">
+
+                <!-- 主文本 -->
+                <TextView
+                    android:id="@+id/sys_sig_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="系统签名服务未启动"
+                    android:textColor="#000000"
+                    android:textSize="16sp" />
+
+                <!-- 描述文本 -->
+                <TextView
+                    android:id="@+id/sys_sig_description"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="请返回首页开启监听"
+                    android:textColor="#808080"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
     <androidx.cardview.widget.CardView
         android:id="@+id/card_shizuku_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="10dp"
         android:foreground="?attr/selectableItemBackground"
+        android:visibility="gone"
         app:cardBackgroundColor="@color/light_red"
         app:cardCornerRadius="36dp"
         app:cardElevation="0dp">
@@ -75,6 +140,7 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="10dp"
         android:foreground="?attr/selectableItemBackground"
+        android:visibility="gone"
         app:cardBackgroundColor="@color/light_green"
         app:cardCornerRadius="36dp"
         app:cardElevation="0dp">
@@ -138,6 +204,7 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="20dp"
         android:foreground="?attr/selectableItemBackground"
+        android:visibility="gone"
         app:cardBackgroundColor="@color/light_red"
         app:cardCornerRadius="36dp"
         app:cardElevation="0dp">

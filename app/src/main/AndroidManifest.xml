@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    android:sharedUserId="android.uid.system">
+
+    <!-- 基础前台服务权限 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 14+ 系统免除类型的前台服务权限（最适合系统签名应用） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <!-- 用于注册全局 Activity 监听器的系统级权限 -->
+    <uses-permission android:name="android.permission.SET_ACTIVITY_WATCHER" tools:ignore="ProtectedPermissions" />
 
     <!--修改系统助手-->
     <uses-permission
@@ -25,6 +33,7 @@
 
     <application
         android:name=".MainApplication"
+        android:persistent="true"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -156,18 +165,10 @@
             android:launchMode="singleTask"
             android:excludeFromRecents="true"
             android:finishOnTaskLaunch="true" />
-
-        <meta-data
-            android:name="xposedmodule"
-            android:value="true" />
-        <meta-data
-            android:name="xposeddescription"
-            android:value="JumpReplay" />
-        <meta-data
-            android:name="xposedminversion"
-            android:value="89" />
-        <meta-data
-            android:name="xposedscope"
-            android:value="android" />
+        <service
+            android:name=".service.SystemMonitorService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted" />
     </application>
 </manifest>

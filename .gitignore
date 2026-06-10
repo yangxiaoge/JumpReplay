@@ -9,3 +9,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# 排除敏感的密钥库和证书，防范安全泄露
+*.keystore
+*.jks
+*.log
+

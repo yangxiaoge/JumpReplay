@@ -5,6 +5,7 @@ import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.content.Intent;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
@@ -61,6 +62,7 @@ public class HomeFragment extends Fragment {
 
     private FloatingActionButton fab;
     private static boolean isHook = false; // 保留 isHook 状态
+    private ColorStateList defaultEmptyViewTextColor;
 
     private Map<String, Object> JsonData = new HashMap<>();
 
@@ -195,9 +197,18 @@ public class HomeFragment extends Fragment {
             }
         });
 
+        // 初始化 isHook 状态同步
+        boolean isEnabled = com.fourtwo.hookintent.utils.SharedPreferencesUtils.getBoolean(requireContext(), "controller_enabled");
+        viewModel.setIsHook(isEnabled);
+
         // 按钮保活
         viewModel.getIsHook().observe(getViewLifecycleOwner(), hook -> {
             isHook = hook;
+            updateFabAppearance();
+        });
+
+        // 监听系统监听服务运行状态的实时变化，避免异步启动带来的 UI 延迟不刷新
+        com.fourtwo.hookintent.service.SystemMonitorService.serviceStatus.observe(getViewLifecycleOwner(), running -> {
             updateFabAppearance();
         });
 
@@ -206,6 +217,30 @@ public class HomeFragment extends Fragment {
             // Toggle the isHook state
             boolean newIsHook = !isHook;
             viewModel.setIsHook(newIsHook);
+            
+            // 控制 SystemMonitorService 服务启动或关闭
+            com.fourtwo.hookintent.utils.SharedPreferencesUtils.putBoolean(requireContext(), "controller_enabled", newIsHook);
+            Intent serviceIntent = new Intent(requireContext(), com.fourtwo.hookintent.service.SystemMonitorService.class);
+            try {
+                if (newIsHook) {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        requireContext().startForegroundService(serviceIntent);
+                    } else {
+                        requireContext().startService(serviceIntent);
+                    }
+                } else {
+                    requireContext().stopService(serviceIntent);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "切换 SystemMonitorService 失败", e);
+            }
+
+            // 异步延迟刷新，双重保障在服务启动后的渲染状态正确性
+            fab.postDelayed(() -> {
+                if (isAdded()) {
+                    updateFabAppearance();
+                }
+            }, 300);
         });
 
         updateFabAppearance();
@@ -306,6 +341,9 @@ public class HomeFragment extends Fragment {
     private void setEmptyView(String text) {
         if (MainActivity.isXposed()) {
             emptyView.setText(text);
+            if (defaultEmptyViewTextColor != null) {
+                emptyView.setTextColor(defaultEmptyViewTextColor);
+            }
         } else {
             emptyView.setText(getString(R.string.empty_view_not_xposed_text));
             emptyView.setTextColor(ContextCompat.getColor(requireContext(), R.color.red));
@@ -319,6 +357,7 @@ public class HomeFragment extends Fragment {
 
         recyclerView = root.findViewById(R.id.recycler_view);
         emptyView = root.findViewById(R.id.empty_view);
+        defaultEmptyViewTextColor = emptyView.getTextColors();
         setEmptyView(getString(R.string.empty_view));
 
         // Set up RecyclerView

@@ -132,12 +132,18 @@ public class DataProcessor {
             }
 
             String batchDataJson = data.getString("batch_data_binder");
-
-            List<Bundle> bundles = JsonHandler.fromJson(batchDataJson);
-            Log.d(TAG, "processReceivedData: " + bundles.size());
-
-            for (Bundle bundle : bundles) {
-                processBundle(bundle, callback);
+            if (batchDataJson != null && !batchDataJson.trim().isEmpty()) {
+                List<Bundle> bundles = JsonHandler.fromJson(batchDataJson);
+                Log.d(TAG, "processReceivedData (batch): " + (bundles != null ? bundles.size() : 0));
+                if (bundles != null) {
+                    for (Bundle bundle : bundles) {
+                        processBundle(bundle, callback);
+                    }
+                }
+            } else {
+                // 兼容本地直接投递的单条数据格式，直接进行解析
+                Log.d(TAG, "processReceivedData (single): " + data);
+                processBundle(data, callback);
             }
 
         } catch (Exception e) {

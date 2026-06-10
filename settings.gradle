@@ -16,5 +16,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "HookIntent"
 include ':app'
-include ':hiddenapi'
 include ':blocker_template'

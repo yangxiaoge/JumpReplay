@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -62,6 +63,11 @@ public class SetupFragment extends Fragment {
     private ImageView shizukuIcon;
     private TextView shizukuDescription;
 
+    private CardView systemSignatureCard;
+    private TextView systemSignatureText;
+    private ImageView systemSignatureIcon;
+    private TextView systemSignatureDescription;
+
     @SuppressLint({"SetTextI18n", "DefaultLocale"})
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -74,6 +80,11 @@ public class SetupFragment extends Fragment {
         shizukuText = shizukuCard.findViewById(R.id.shizuku_text);
         shizukuIcon = shizukuCard.findViewById(R.id.shizuku_icon);
         shizukuDescription = view.findViewById(R.id.shizuku_description);
+
+        systemSignatureCard = view.findViewById(R.id.card_system_signature_status);
+        systemSignatureText = systemSignatureCard.findViewById(R.id.sys_sig_text);
+        systemSignatureIcon = systemSignatureCard.findViewById(R.id.sys_sig_icon);
+        systemSignatureDescription = systemSignatureCard.findViewById(R.id.sys_sig_description);
 
         CardView rootCard = view.findViewById(R.id.card_root_status);
         TextView rootText = rootCard.findViewById(R.id.root_text);
@@ -141,6 +152,18 @@ public class SetupFragment extends Fragment {
 
         // 确保 UI 更新逻辑在视图创建后调用
         updateShizukuUI();
+        updateSystemSignatureUI();
+
+        com.fourtwo.hookintent.service.SystemMonitorService.serviceStatus.observe(getViewLifecycleOwner(), running -> {
+            updateSystemSignatureUI();
+        });
+
+        systemSignatureCard.setOnClickListener(v -> {
+            boolean isRunning = com.fourtwo.hookintent.service.SystemMonitorService.isRunning();
+            if (!isRunning) {
+                Toast.makeText(requireContext(), "请返回首页，点击右下角按钮启动监听服务", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         // 设置 Shizuku Card 的长按监听器
         shizukuCard.setOnClickListener(v -> {
@@ -290,6 +313,22 @@ public class SetupFragment extends Fragment {
             AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList());
         } else {
             AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag));
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
+    private void updateSystemSignatureUI() {
+        boolean isRunning = com.fourtwo.hookintent.service.SystemMonitorService.isRunning();
+        if (isRunning) {
+            systemSignatureText.setText("系统签名监听服务已激活");
+            systemSignatureIcon.setImageResource(R.drawable.baseline_check_circle_outline_24);
+            systemSignatureCard.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_green));
+            systemSignatureDescription.setText("免 Root/Xposed/Shizuku 运行中");
+        } else {
+            systemSignatureText.setText("系统签名监听服务未启动");
+            systemSignatureIcon.setImageResource(R.drawable.outline_cancel_24);
+            systemSignatureCard.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red));
+            systemSignatureDescription.setText("请返回首页开启监听");
         }
     }
 }

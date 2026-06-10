@@ -95,7 +95,7 @@
     <string name="is_not_list">当前没有可用分组</string>
     <string name="not_favorites">无收藏</string>
     <string name="empty_view_not">暂无数据</string>
-    <string name="empty_view_not_xposed_text">模块未激活! 如果使用了LSPatch 请忽略</string>
+    <string name="empty_view_not_xposed_text">系统监听服务未激活！请点击右下角按钮启动服务</string>
     <string name="open_window_main_switch">打开悬浮窗(重启进程生效)</string>
     <string name="window_sub_switch">模块悬浮窗开关</string>
     <string name="pick_color">选择颜色</string>
