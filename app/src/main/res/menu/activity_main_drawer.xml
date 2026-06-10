@@ -25,10 +25,12 @@
         android:id="@+id/group2"
         android:checkableBehavior="single">
 
+        <!-- 系统签名版不再需要“打包拦截器”，在此隐藏
         <item
             android:id="@+id/nav_blocker"
             android:icon="@drawable/intercept"
             android:title="@string/menu_blocker" />
+        -->
 
         <item
             android:id="@+id/nav_intercept"

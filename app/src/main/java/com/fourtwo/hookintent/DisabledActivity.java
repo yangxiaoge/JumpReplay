@@ -23,7 +23,6 @@ import com.fourtwo.hookintent.adapter.DisabledActivityAdapter;
 import com.fourtwo.hookintent.base.JsonHandler;
 import com.fourtwo.hookintent.data.Constants;
 import com.fourtwo.hookintent.databinding.ActivityDisabledBinding;
-import com.fourtwo.hookintent.utils.BatteryOptimizationHelper;
 import com.fourtwo.hookintent.utils.SharedPreferencesUtils;
 
 import java.util.ArrayList;
@@ -48,15 +47,7 @@ public class DisabledActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 初始化工具类
-        BatteryOptimizationHelper batteryHelper = new BatteryOptimizationHelper(this);
-        if (!batteryHelper.isIgnoringBatteryOptimizations()) {
-            Log.i(TAG, "不在白名单中");
-            // 跳转到电池优化设置页面
-            batteryHelper.showSimpleDialog("禁用意图需要电池优化,否则会出现JumpReplay未启动导致意图禁用失效.");
-        } else {
-            Log.i(TAG, "在白名单中");
-        }
+        // 系统签名版默认拥有后台白名单与保活特权，无需检测与弹出电池优化提示
 
 
         binding = ActivityDisabledBinding.inflate(getLayoutInflater());

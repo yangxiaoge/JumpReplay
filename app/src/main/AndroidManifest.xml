@@ -5,6 +5,8 @@
 
     <!-- 基础前台服务权限 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- 获取运行任务的权限，用于回溯跳转的发起方 -->
+    <uses-permission android:name="android.permission.GET_TASKS" />
     <!-- Android 14+ 系统免除类型的前台服务权限（最适合系统签名应用） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
     <!-- 用于注册全局 Activity 监听器的系统级权限 -->

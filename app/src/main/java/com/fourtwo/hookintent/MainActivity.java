@@ -142,7 +142,6 @@ public class MainActivity extends AppCompatActivity {
                 R.id.nav_home,
                 R.id.nav_star,
                 R.id.nav_settings,
-                R.id.nav_blocker,
                 R.id.nav_history,
                 R.id.nav_setup,
                 R.id.nav_me

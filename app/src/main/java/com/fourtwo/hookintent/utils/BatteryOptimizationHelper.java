@@ -22,6 +22,10 @@ public class BatteryOptimizationHelper {
      * 检查是否在白名单内
      */
     public boolean isIgnoringBatteryOptimizations() {
+        // 如果是系统应用（拥有 FLAG_SYSTEM 或 FLAG_UPDATED_SYSTEM_APP 标记），则默认豁免，直接返回 true
+        if ((context.getApplicationInfo().flags & (android.content.pm.ApplicationInfo.FLAG_SYSTEM | android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0) {
+            return true;
+        }
         boolean isIgnoring = false;
         PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         if (powerManager != null) {
