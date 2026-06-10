@@ -31,6 +31,8 @@ import java.util.regex.PatternSyntaxException;
 public class SystemActivityController extends IActivityController.Stub {
     private static final String TAG = "SystemActivityController";
     private final Context mContext;
+    // 记录最近一个进入 Resumed 状态的包名，作为跳转的发起方 (from)
+    private volatile String mLastResumedPackage = "unknown";
 
     public SystemActivityController(Context context) {
         this.mContext = context.getApplicationContext();
@@ -91,11 +93,11 @@ public class SystemActivityController extends IActivityController.Stub {
             Bundle bundle = DataConverter.convertIntentToBundle(intent);
             
             bundle.putString("category", intent.getDataString() != null ? "Scheme" : "Intent");
-            bundle.putString("FunctionCall", "SystemActivityController.activityStarting");
+            bundle.putString("FunctionCall", "IActivityController.activityStarting");
             bundle.putString("uri", uri);
             bundle.putString("packageName", targetPkg);
             bundle.putString("time", new SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.getDefault()).format(Calendar.getInstance().getTime()));
-            bundle.putString("from", "SystemActivityController");
+            bundle.putString("from", mLastResumedPackage);
 
             // 塞入 MessengerService 的队列中，UI 挂载的 LiveData 观察者会自动读取渲染
             MessengerService messengerService = MessengerService.getInstance();
@@ -171,6 +173,8 @@ public class SystemActivityController extends IActivityController.Stub {
 
     @Override
     public boolean activityResuming(String pkg) throws RemoteException {
+        // 记录当前处于前台（Resumed）的包名，作为后续可能发生的跳转的发起方
+        mLastResumedPackage = pkg;
         return true;
     }
 
