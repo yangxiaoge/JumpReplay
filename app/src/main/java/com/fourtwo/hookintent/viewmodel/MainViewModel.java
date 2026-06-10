@@ -40,7 +40,8 @@ public class MainViewModel extends ViewModel {
     public void addIntentData(ItemData data) {
         List<ItemData> currentList = intentDataList.getValue();
         if (currentList != null) {
-            currentList.add(data);
+            // 将最新接收到的数据放在最上方（0 号位置）
+            currentList.add(0, data);
             intentDataList.setValue(currentList);
         }
     }

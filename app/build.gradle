@@ -64,16 +64,6 @@ dependencies {
 
     implementation "org.lsposed.hiddenapibypass:hiddenapibypass:4.3"
 
-    // Root提权
-    def libsu_version = '6.0.0'
-    implementation "com.github.topjohnwu.libsu:core:${libsu_version}"
-    implementation "com.github.topjohnwu.libsu:service:${libsu_version}"
-
-    // ShiZuKu
-    def shizuku_version = '13.1.5'
-    implementation "dev.rikka.shizuku:api:${shizuku_version}"
-    implementation "dev.rikka.shizuku:provider:${shizuku_version}"
-
     implementation 'com.squareup.okhttp3:okhttp:4.9.3'
 
     implementation 'io.noties.markwon:image:4.6.2'
