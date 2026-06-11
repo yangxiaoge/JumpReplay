@@ -157,7 +157,7 @@
         <service
             android:name=".service.SystemMonitorService"
             android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="systemExempted" />
     </application>
 </manifest>

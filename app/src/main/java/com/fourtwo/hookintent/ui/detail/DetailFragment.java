@@ -174,6 +174,10 @@ public class DetailFragment extends Fragment {
                 dataList.add(new Pair<>(entry.getKey(), entry.getValue()));
             }
 
+            if ("Intent".equals(itemData.getCategory())) {
+                dataList.add(new Pair<>("extras说明", "AOSP限制无法获取（建议在root设备上xposed使用原版应用抓取）"));
+            }
+
             DetailAdapter adapter = new DetailAdapter(dataList);
             recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
             recyclerView.setAdapter(adapter);
@@ -325,7 +329,8 @@ public class DetailFragment extends Fragment {
         List<Runnable> actions = new ArrayList<>();
 
         if (Category.equals("Intent")) {
-            ArrayList<?> intentExtras = bundle.getStringArrayList("intentExtras");
+            // 修复类型读取 Bug：DataConverter 存入的是 Serializable 类型的 ArrayList，直接 getStringArrayList 会返回 null
+            ArrayList<?> intentExtras = (ArrayList<?>) bundle.getSerializable("intentExtras");
             boolean hasError = false;
             String activityTemplate = "am start -n %s %s";
             String packageName = bundle.getString("componentClassName");

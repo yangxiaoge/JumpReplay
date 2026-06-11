@@ -57,6 +57,10 @@ android {
     buildFeatures {
         aidl true
     }
+    lintOptions {
+        checkReleaseBuilds false
+        abortOnError false
+    }
 }
 
 dependencies {

@@ -55,24 +55,45 @@ public class SystemActivityController extends IActivityController.Stub {
         }
     }
 
-    // 从最近运行的任务栈中回溯寻找真实的跳转发起方包名
-    private String getCallingPackageFromTasks(String targetPkg) {
+    // 从最近运行的任务栈中回溯寻找真实的跳转发起方信息（支持跨应用返回包名，应用内部跳转返回发起 Activity 类名）
+    private String getCallingPackageFromTasks(Intent intent, String targetPkg) {
         try {
             ActivityManager am = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
             List<ActivityManager.RunningTaskInfo> tasks = am.getRunningTasks(5);
             if (tasks != null) {
+                String targetClassName = (intent != null && intent.getComponent() != null) 
+                        ? intent.getComponent().getClassName() : "";
+                        
                 for (ActivityManager.RunningTaskInfo task : tasks) {
                     if (task.topActivity != null) {
                         String pkgName = task.topActivity.getPackageName();
-                        // 忽略目标应用包名以及我们拦截器本尊的包名
-                        if (!pkgName.equals(targetPkg) && !pkgName.equals(mContext.getPackageName())) {
+                        String className = task.topActivity.getClassName();
+                        
+                        // 1. 忽略我们拦截器本尊的包名
+                        if (pkgName.equals(mContext.getPackageName())) {
+                            continue;
+                        }
+                        
+                        // 2. 如果包名与目标包名不同，说明是跨应用跳转，直接返回该发起包名
+                        if (!pkgName.equals(targetPkg)) {
                             return pkgName;
+                        }
+                        
+                        // 3. 如果是应用内跳转（包名相同）
+                        // 3.1. 如果当前栈顶已经是目标类名，说明新 Activity 已是栈顶但仍在同一个任务中，此时通过根 Activity (baseActivity) 获取发起方 MainActivity
+                        if (className.equals(targetClassName)) {
+                            if (task.baseActivity != null) {
+                                return task.baseActivity.getClassName();
+                            }
+                        } else {
+                            // 3.2. 如果栈顶类名不等于目标类名，说明栈顶即为同包发起 Activity
+                            return className;
                         }
                     }
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "从任务栈中回溯获取发起方包名失败", e);
+            Log.e(TAG, "从任务栈中回溯获取发起方信息失败", e);
         }
         return "unknown";
     }
@@ -93,9 +114,12 @@ public class SystemActivityController extends IActivityController.Stub {
             return true;
         }
 
-        Log.d(TAG, "监听到应用跳转: 目标应用 = " + pkg + ", Intent = " + intent);
-
-        // 3. 将捕获到的 Intent 记录并发送给 UI 刷新
+        Log.i(TAG, "监听到应用跳转: 目标应用 = " + pkg + ", Intent = " + intent + ", 是否包含 extras: " + (intent.getExtras() != null));
+        try {
+            Log.d(TAG, "诊断 - Intent 完整 URI (包含 extras): " + intent.toUri(Intent.URI_INTENT_SCHEME));
+        } catch (Exception e) {
+            Log.e(TAG, "诊断 - 获取 Intent URI 异常", e);
+        }
         recordIntentForReplay(intent, pkg);
 
         // 4. 检查跳转拦截规则 (Blocker)
@@ -129,24 +153,58 @@ public class SystemActivityController extends IActivityController.Stub {
             @Override
             public void run() {
                 try {
-                    // 1. 尝试从系统最近运行任务栈回溯发起包名
-                    String fromPkg = getCallingPackageFromTasks(targetPkg);
+                    // 调试打印：记录此时的任务栈状态，便于后续通过 Logcat 进行物理观察
+                    try {
+                        ActivityManager debugAm = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
+                        List<ActivityManager.RunningTaskInfo> debugTasks = debugAm.getRunningTasks(5);
+                        if (debugTasks != null) {
+                            for (int i = 0; i < debugTasks.size(); i++) {
+                                ActivityManager.RunningTaskInfo t = debugTasks.get(i);
+                                Log.d(TAG, "调试任务栈 [" + i + "]: top=" + t.topActivity + ", base=" + t.baseActivity + ", numActivities=" + t.numActivities);
+                            }
+                        }
+                    } catch (Exception ignored) {}
+
+                    // 1. 尝试从系统最近运行任务栈回溯发起包名/Activity类名
+                    String fromPkg = getCallingPackageFromTasks(intent, targetPkg);
                     
                     // 2. 如果回溯结果无效，则使用 mLastResumedPackage 做为兜底
                     if ("unknown".equals(fromPkg) || fromPkg.isEmpty()) {
                         fromPkg = mLastResumedPackage;
+                    }
+                    
+                    // 2.1. 强力校验：如果前台是目标应用本身，但回溯结果却是外部包（例如 Launcher），说明回溯越界误判，强制修正为 mLastResumedPackage 或者是 targetPkg
+                    if (mLastResumedPackage != null && mLastResumedPackage.equals(targetPkg)) {
+                        if (fromPkg != null && !fromPkg.startsWith(targetPkg)) {
+                            Log.w(TAG, "回溯包名越界误判: " + fromPkg + ", 强制修正为前台同包应用: " + mLastResumedPackage);
+                            fromPkg = mLastResumedPackage;
+                        }
                     }
 
                     // 转换为 URI 串
                     String uri = intent.toUri(Intent.URI_INTENT_SCHEME);
                     
                     // 复用原本 Xposed 传回的 Bundle 数据格式
-                    Bundle bundle = DataConverter.convertIntentToBundle(intent);
+                    Bundle bundle = DataConverter.convertIntentToBundle(intent, mContext, targetPkg);
                     
                     bundle.putString("category", intent.getDataString() != null ? "Scheme" : "Intent");
+                    if (intent.getDataString() != null) {
+                        // 补充 scheme_raw_url 字段，防止被数据处理器过滤，同时供详情页解析与复制
+                        bundle.putString("scheme_raw_url", intent.getDataString());
+                    }
                     bundle.putString("FunctionCall", inferFunctionCall(intent));
                     bundle.putString("uri", uri);
                     bundle.putString("packageName", targetPkg);
+                    
+                    // 补全进程名（如果是应用内部跳转，发起进程名为目标包名；如果是跨包跳转，发起进程名为发起包名）
+                    String processName = fromPkg;
+                    if (fromPkg.startsWith(targetPkg)) {
+                        processName = targetPkg;
+                    }
+                    bundle.putString("processName", processName);
+                    
+                    // 补充调用栈占位符，说明免 Xposed 系统级拦截的原理
+                    bundle.putString("stack_trace", "系统签名版拦截 (免 Xposed)\n拦截机制: IActivityController.activityStarting\n发起包名: " + fromPkg + "\n目标包名: " + targetPkg);
                     bundle.putString("time", new SimpleDateFormat("yyyy-MM-dd hh:mm:ss a", Locale.getDefault()).format(Calendar.getInstance().getTime()));
                     bundle.putString("from", fromPkg);
 

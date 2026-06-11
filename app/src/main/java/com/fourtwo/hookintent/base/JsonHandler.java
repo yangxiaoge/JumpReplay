@@ -49,9 +49,10 @@ public class JsonHandler {
     // 读取 JSON 文件并解析为 Map<String, Object>
     public Map<String, Object> readJsonFromFile(Context context) {
         synchronized (lock) {
-            File file = new File(context.getExternalFilesDir(null), FILE_NAME);
+            // 使用内部存储 getFilesDir() 避免系统签名版 (System UID) 访问外部存储受限的问题
+            File file = new File(context.getFilesDir(), FILE_NAME);
             if (!file.exists()) {
-                Log.e(TAG, "File not found in external files dir. Attempting to copy from assets.");
+                Log.e(TAG, "File not found in files dir. Attempting to copy from assets.");
                 copyFromAssetsToExternalFilesDir(context);
             }
             String jsonString = loadJSONFromFilesDir(context);
@@ -73,7 +74,8 @@ public class JsonHandler {
         synchronized (lock) {
             JSONObject jsonObject = new JSONObject(data);
             String jsonString = jsonObject.toString();
-            File file = new File(context.getExternalFilesDir(null), FILE_NAME);
+            // 使用内部存储 getFilesDir() 确保系统签名版能正常写入
+            File file = new File(context.getFilesDir(), FILE_NAME);
             try (FileOutputStream fos = new FileOutputStream(file)) {
                 fos.write(jsonString.getBytes(StandardCharsets.UTF_8));
                 fos.flush();
@@ -84,9 +86,9 @@ public class JsonHandler {
         }
     }
 
-    // 从应用的外部文件目录加载 JSON 文件
+    // 从应用的内部文件目录加载 JSON 文件
     private String loadJSONFromFilesDir(Context context) {
-        File file = new File(context.getExternalFilesDir(null), FILE_NAME);
+        File file = new File(context.getFilesDir(), FILE_NAME);
         if (!file.exists()) {
             Log.e(TAG, "File not found: " + file.getAbsolutePath());
             return null;
@@ -105,9 +107,9 @@ public class JsonHandler {
         return json;
     }
 
-    // 复制 assets 中的 JSON 文件到外部文件目录
+    // 复制 assets 中的 JSON 文件到内部文件目录
     private void copyFromAssetsToExternalFilesDir(Context context) {
-        File file = new File(context.getExternalFilesDir(null), FILE_NAME);
+        File file = new File(context.getFilesDir(), FILE_NAME);
         try (InputStream is = context.getAssets().open(FILE_NAME);
              FileOutputStream fos = new FileOutputStream(file)) {
             byte[] buffer = new byte[1024];
@@ -117,7 +119,7 @@ public class JsonHandler {
             }
         } catch (IOException e) {
             e.printStackTrace();
-            Log.e(TAG, "Error copying file from assets to external files dir");
+            Log.e(TAG, "Error copying file from assets to files dir");
         }
     }
 
